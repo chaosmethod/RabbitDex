@@ -10,6 +10,7 @@
       color: #000;
       height: 282px; /* Full viewport height */
       overflow: hidden;
+      position: relative;
     }
     #screen {
       background: #000; /* Black screen */
@@ -35,32 +36,50 @@
       margin: 2px;
       display: inline-block;
       cursor: pointer;
-      width: 90px; /* Fixed width for consistency */
+      width: 90px; /* Adjusted for 2x2 fit */
+      height: 30px; /* Uniform height */
     }
     #rabbitdex-list img { width: 60px; vertical-align: middle; }
     #rabbitdex-list li { margin: 5px 0; }
     #detail { padding: 10px; }
-    .exit-btn { position: absolute; bottom: 5px; right: 5px; background: #AAA; padding: 3px; }
+    .exit-btn { background: #AAA; padding: 3px; }
     .hidden { display: none; }
-    #home .button { display: block; margin: 5px auto; } /* Stack home buttons vertically */
+    #home .button { display: block; margin: 5px auto; }
+    #menu-area {
+      position: absolute;
+      top: 210px; /* Below screen (180px) + 30px margin, approximating blue area */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 220px;
+      background: #00F; /* Blue placeholder for your image's area */
+      padding: 5px 0;
+      text-align: center;
+    }
+    #camera-controls, #rabbitdex-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 5px;
+      width: 190px; /* Fit two buttons wide */
+      margin: 0 auto;
+    }
+    #rabbitdex-controls {
+      grid-template-rows: 1fr; /* 1x2 grid for Narrate and Exit */
+    }
+    video { width: 100%; height: auto; }
+    #camera-log { position: absolute; bottom: 40px; left: 10px; width: 200px; height: 20px; overflow-y: auto; font-size: 10px; }
   </style>
 </head>
 <body>
   <div id="top-hinge"></div>
   <div id="screen">
     <section id="camera" class="hidden">
-      <button id="start-camera" class="button">Start</button>
-      <button id="stop-camera" class="button">Stop</button>
-      <button id="scan" class="button">Scan</button>
       <video id="camera-preview" autoplay playsinline></video>
       <div id="camera-log" class="log"></div>
-      <button id="exit-camera" class="exit-btn button">Exit</button>
     </section>
     <section id="rabbitdex" class="hidden">
       <ul id="rabbitdex-list"></ul>
-      <button id="narrate" class="button">Narrate (PTT)</button>
       <div id="detail"></div>
-      <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
     </section>
     <section id="home">
       <button id="go-to-camera" class="button">Scan Creature</button>
@@ -68,9 +87,26 @@
       <button id="exit-app" class="exit-btn button">Exit</button>
     </section>
   </div>
+  <div id="menu-area">
+    <section id="camera" class="hidden">
+      <div id="camera-controls">
+        <button id="start-camera" class="button">Start</button>
+        <button id="stop-camera" class="button">Stop</button>
+        <button id="scan" class="button">Scan</button>
+        <button id="exit-camera" class="exit-btn button">Exit</button>
+      </div>
+    </section>
+    <section id="rabbitdex" class="hidden">
+      <div id="rabbitdex-controls">
+        <button id="narrate" class="button">Narrate</button>
+        <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
+      </div>
+    </section>
+  </div>
 
   <script>
     let cameraStream, currentView = 'home', currentIndex = 0, rabbitdexData;
+
     const views = ['home', 'camera', 'rabbitdex'];
 
     async function startCamera() {
@@ -120,11 +156,13 @@
     async function scanCard() {
       if (!cameraStream) await startCamera();
       try {
+        log('Attempting to capture image...');
         const canvas = document.createElement('canvas');
         canvas.width = 240; canvas.height = 282;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(document.getElementById('camera-preview'), 0, 0, 240, 282);
         const imageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
+        log('Image captured, sending to LLM...');
 
         const response = await new Promise(resolve => {
           PluginMessageHandler.postMessage(JSON.stringify({
@@ -133,8 +171,10 @@
             response: true
           }), resolve);
         });
+        log('LLM response received: ' + response.message);
         const cardData = JSON.parse(response.message);
         if (cardData.name) {
+          log(`Detected: ${cardData.name}`);
           const rabbitdexEntry = (await fetchRabbitdexData()).find(p => p.name === cardData.name.toLowerCase());
           cardData.imageUrl = rabbitdexEntry ? rabbitdexEntry.imageUrl : await getImageUrl(cardData.name);
           cardData.type = rabbitdexEntry ? rabbitdexEntry.types.join('/') : cardData.type;
@@ -142,6 +182,8 @@
           saveEntry(cardData);
           switchView('rabbitdex');
           updateGallery();
+        } else {
+          log('No valid name detected by LLM');
         }
       } catch (e) { log(`Scan error: ${e.message}`); }
     }
