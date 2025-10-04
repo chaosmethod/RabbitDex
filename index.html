@@ -1,33 +1,50 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
+  <title>RabbitDex</title>
   <style>
     body {
       margin: 0;
       padding: 0;
-      background: #FF0000; /* Red RabbitDex body */
-      font-family: 'Courier New', monospace; /* Pixel font */
+      background: #FF0000;
+      font-family: 'Courier New', monospace;
       color: #000;
-      height: 282px; /* Full viewport height */
+      height: 100vh;
       overflow: hidden;
       position: relative;
-    }
-    #screen {
-      background: #000; /* Black screen */
-      border: 2px solid #FFF;
-      width: 220px;
-      height: 180px;
-      margin: 20px auto;
-      position: relative;
-      overflow-y: auto;
-      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     #top-hinge {
       background: #666;
       height: 10px;
       width: 220px;
-      margin: 0 auto;
+      margin-top: 10px;
+      border-radius: 3px;
+    }
+    #screen {
+      background: #000;
+      border: 2px solid #FFF;
+      width: 220px;
+      height: 180px;
+      margin: 12px 0;
       position: relative;
+      overflow-y: auto;
+      border-radius: 5px;
+      color: #fff;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    #menu-area {
+      position: absolute;
+      top: calc(10px + 180px + 30px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 220px;
+      padding: 5px 0;
+      text-align: center;
     }
     .button {
       background: #DDD;
@@ -36,260 +53,453 @@
       margin: 2px;
       display: inline-block;
       cursor: pointer;
-      width: 105px; /* Reduced width to prevent overflow */
-      height: 30px; /* Uniform height */
-      text-align: center; /* Center text */
-      white-space: nowrap; /* Prevent wrapping */
-      overflow: hidden; /* Hide overflow if needed */
-      text-overflow: ellipsis; /* Ellipsis for too long text */
-      box-sizing: border-box; /* Include border/padding in width */
+      width: 105px;
+      height: 30px;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-sizing: border-box;
+      font-family: inherit;
     }
-    #rabbitdex-list img { width: 60px; vertical-align: middle; }
-    #rabbitdex-list li { margin: 5px 0; }
-    #detail { padding: 10px; }
     .exit-btn { background: #AAA; padding: 3px; }
     .hidden { display: none; }
-    #menu-area {
-      position: absolute;
-      top: 210px; /* Below screen (180px) + 30px margin, approximating position but in red */
-      left: 50%;
-      transform: translateX(-50%);
-      width: 220px;
-      padding: 5px 0;
-      text-align: center;
-    }
     #camera-controls, #rabbitdex-controls, #home-controls {
-      display: grid;
+      display: none;
       grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
       gap: 5px;
-      width: 220px; /* Full width for perfect centering */
+      width: 220px;
       margin: 0 auto;
-      display: none; /* Hidden by default */
     }
-    #rabbitdex-controls, #home-controls {
-      grid-template-rows: 1fr; /* 1x2 grid for two buttons */
-    }
-    video { width: 100%; height: auto; }
-    #camera-log { position: absolute; bottom: 40px; left: 10px; width: 200px; height: 20px; overflow-y: auto; font-size: 10px; }
+    video { width: 100%; height: auto; background: #222; }
+    #camera-log { position: absolute; bottom: -36px; left: 10px; width: 200px; height: 30px; overflow-y: auto; font-size: 10px; color: #000; background: #fff; padding: 2px; border-radius: 3px; box-sizing: border-box; }
+    #rabbitdex-list { list-style: none; padding: 0; margin: 0; color: #000; }
+    #rabbitdex-list li { margin: 5px 0; cursor: pointer; display:flex; align-items:center; gap:8px; background:#fff; color:#000; padding:4px; border-radius:4px; }
+    #rabbitdex-list img { width: 48px; height: 48px; object-fit:contain; }
+    #detail { padding: 6px; color: #000; background:#fff; border-radius:4px; margin-top:6px; min-height:36px; font-size:12px; }
+    #debug-overlay { position: fixed; right: 8px; top: 8px; background: rgba(0,0,0,0.6); color: #fff; padding:6px; font-size:11px; border-radius:4px; max-width:260px; z-index:999; display:none; }
+    a.collection-link { color: blue; text-decoration: underline; font-weight:bold; }
   </style>
 </head>
 <body>
   <div id="top-hinge"></div>
+
   <div id="screen">
-    <section id="camera" class="hidden">
+    <section id="camera" class="hidden" aria-hidden="true">
       <video id="camera-preview" autoplay playsinline></video>
       <div id="camera-log" class="log"></div>
     </section>
-    <section id="rabbitdex" class="hidden">
+
+    <section id="rabbitdex" class="hidden" aria-hidden="true">
       <ul id="rabbitdex-list"></ul>
       <div id="detail"></div>
     </section>
-    <section id="home" class="hidden">
-      <!-- No buttons here, moved to menu-area -->
+
+    <section id="home" class="hidden" aria-hidden="false">
+      <div style="color:#000; background:#fff; padding:6px; border-radius:4px;">RabbitDex Home</div>
     </section>
   </div>
+
   <div id="menu-area">
-    <div id="camera-controls">
+    <div id="camera-controls" role="group" aria-label="camera controls">
       <button id="start-camera" class="button">Start</button>
       <button id="stop-camera" class="button">Stop</button>
       <button id="scan" class="button">Scan</button>
       <button id="exit-camera" class="exit-btn button">Exit</button>
     </div>
-    <div id="rabbitdex-controls">
+
+    <div id="rabbitdex-controls" role="group" aria-label="rabbitdex controls">
       <button id="narrate" class="button">Narrate</button>
       <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
     </div>
-    <div id="home-controls">
+
+    <div id="home-controls" role="group" aria-label="home controls">
       <button id="go-to-camera" class="button">Scan Creature</button>
       <button id="go-to-rabbitdex" class="button">RabbitDex</button>
     </div>
   </div>
 
-  <script>
-    let cameraStream, currentView = 'home', currentIndex = 0, rabbitdexData;
-    let pendingLLMResolve = null; // For single request assumption
+  <div id="debug-overlay"></div>
 
+  <script>
+    // Storage wrapper: prefer creationStorage.plain, fallback to localStorage
+    const storageBackend = (function(){
+      try {
+        if (window.creationStorage && window.creationStorage.plain) return window.creationStorage.plain;
+      } catch(e){}
+      return localStorage;
+    })();
+
+    function storageGet(key, fallback = null) {
+      try {
+        const raw = storageBackend.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+    function storageSet(key, value) {
+      try {
+        storageBackend.setItem(key, JSON.stringify(value));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // Globals
+    let cameraStream = null;
+    let currentView = 'home';
+    let currentIndex = 0;
     const views = ['home', 'camera', 'rabbitdex'];
 
-    // Listener for LLM responses
-    window.onPluginMessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'llm_response' && pendingLLMResolve) {
-        pendingLLMResolve(data);
-        pendingLLMResolve = null;
-      }
-    };
+    // DOM refs
+    const videoEl = document.getElementById('camera-preview');
+    const logDiv = document.getElementById('camera-log');
+    const debug = document.getElementById('debug-overlay');
 
+    function log(msg) {
+      const time = new Date().toISOString().split('T')[1].slice(0,8);
+      logDiv.textContent += `[${time}] ${msg}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      updateDebug();
+    }
+
+    function updateDebug() {
+      const entries = storageGet('rabbitdex') || [];
+      debug.innerText = `View: ${currentView}\nSaved: ${entries.length}\nIndex: ${currentIndex}`;
+    }
+
+    // Camera functions
     async function startCamera() {
       try {
         cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        document.getElementById('camera-preview').srcObject = cameraStream;
+        videoEl.srcObject = cameraStream;
+        await videoEl.play().catch(()=>{});
         log('Camera preview started');
-      } catch (e) { log(`Camera error: ${e.message}`); }
+      } catch (e) {
+        log('Camera error: ' + (e && e.message ? e.message : e));
+      }
     }
 
     function stopCamera() {
       if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        document.getElementById('camera-preview').srcObject = null;
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+        videoEl.srcObject = null;
         log('Camera stopped');
       }
     }
 
-    async function fetchRabbitdexData() {
-      if (!rabbitdexData) {
-        const response = await fetch('https://pokemondb.net/pokedex/national');
-        const text = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, 'text/html');
-        const rows = doc.querySelectorAll('#pokedex tbody tr');
-        rabbitdexData = Array.from(rows).map(row => {
-          const cols = row.querySelectorAll('td');
-          const name = cols[1].querySelector('a').textContent.trim().toLowerCase();
-          const types = Array.from(cols[2].querySelectorAll('.type-icon')).map(t => t.title.split(' ')[0].toLowerCase());
-          const descLink = cols[3].querySelector('a');
-          const description = descLink ? descLink.getAttribute('data-description') || 'No description available' : 'No description available';
-          const img = cols[1].querySelector('img');
-          const imageUrl = img ? `https://img.pokemondb.net${img.getAttribute('src')}` : 'https://via.placeholder.com/96?text=?';
-          return { name, types, description, imageUrl };
-        });
-        window.creationStorage.plain.setItem('rabbitdexData', JSON.stringify(rabbitdexData));
-      }
-      return rabbitdexData;
-    }
-
-    async function getImageUrl(name) {
-      const data = await fetchRabbitdexData();
-      const entry = data.find(p => p.name === name.toLowerCase());
-      return entry ? entry.imageUrl : 'https://via.placeholder.com/96?text=?';
-    }
-
-    async function scanCard() {
-      if (!cameraStream) await startCamera();
-      try {
-        log('Attempting to capture image...');
-        const canvas = document.createElement('canvas');
-        canvas.width = 240; canvas.height = 282;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(document.getElementById('camera-preview'), 0, 0, 240, 282);
-        const imageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
-        log('Image captured, sending to LLM...');
-
-        const response = await new Promise(resolve => {
-          pendingLLMResolve = resolve;
-          PluginMessageHandler.postMessage(JSON.stringify({
-            llm: 'Extract from creature card: name, type, description. Output as JSON.',
-            imageBase64,
-            response: true
-          }));
-        });
-        log('LLM response received: ' + response.message);
-        const cardData = JSON.parse(response.message);
-        if (cardData.name) {
-          log(`Detected: ${cardData.name}`);
-          const rabbitdexEntry = (await fetchRabbitdexData()).find(p => p.name === cardData.name.toLowerCase());
-          cardData.imageUrl = rabbitdexEntry ? rabbitdexEntry.imageUrl : await getImageUrl(cardData.name);
-          cardData.type = rabbitdexEntry ? rabbitdexEntry.types.join('/') : cardData.type;
-          cardData.description = rabbitdexEntry ? rabbitdexEntry.description : cardData.description;
-          saveEntry(cardData);
-          switchView('rabbitdex');
-          updateGallery();
-        } else {
-          log('No valid name detected by LLM');
+    // LLM/Plugin messaging wrapper (guarded)
+    function sendToLLM(payload, expectResponse = true) {
+      return new Promise((resolve, reject) => {
+        try {
+          if (typeof PluginMessageHandler !== 'undefined' && PluginMessageHandler.postMessage) {
+            // include response flag if requested
+            const messageObj = Object.assign({}, payload, { response: !!expectResponse });
+            PluginMessageHandler.postMessage(JSON.stringify(messageObj), (resp) => {
+              // handler-style callback from platform tests: ensure consistent resolve payload
+              try {
+                resolve(typeof resp === 'string' ? JSON.parse(resp) : resp);
+              } catch (e) {
+                resolve(resp);
+              }
+            });
+            // If the platform posts back via window.onPluginMessage instead, that should be handled by that callback (below).
+          } else {
+            // No platform handler available in this environment
+            log('PluginMessageHandler not available; cannot send to LLM on this runtime.');
+            reject(new Error('PluginMessageHandler unavailable'));
+          }
+        } catch (e) {
+          reject(e);
         }
-      } catch (e) { log(`Scan error: ${e.message}`); }
-    }
-
-    function saveEntry(data) {
-      let entries = JSON.parse(window.creationStorage.plain.getItem('rabbitdex') || '[]');
-      entries.push(data);
-      window.creationStorage.plain.setItem('rabbitdex', JSON.stringify(entries));
-    }
-
-    function updateGallery() {
-      const list = document.getElementById('rabbitdex-list');
-      list.innerHTML = '';
-      const entries = JSON.parse(window.creationStorage.plain.getItem('rabbitdex') || '[]');
-      entries.forEach((entry, i) => {
-        const li = document.createElement('li');
-        li.innerHTML = `<img src="${entry.imageUrl}" alt="${entry.name}"> ${entry.name}`;
-        li.onclick = () => showDetail(i);
-        list.appendChild(li);
       });
     }
 
+    // If platform uses window.onPluginMessage for async responses, handle it gracefully
+    if (typeof window.onPluginMessage !== 'undefined') {
+      const orig = window.onPluginMessage;
+      window.onPluginMessage = function(msg) {
+        try {
+          const parsed = typeof msg === 'string' ? JSON.parse(msg) : msg;
+          if (parsed && parsed._type === 'llmResponse') {
+            // user apps can implement custom behavior if desired
+            log('LLM unsolicited response received');
+          }
+        } catch (e) {}
+        try { orig(msg); } catch(e) {}
+      };
+    }
+
+    // Fetch pokedex national and parse mapping name -> url (cached)
+    let pokedexIndex = null;
+    async function ensurePokedexIndex() {
+      if (pokedexIndex) return pokedexIndex;
+      try {
+        const res = await fetch('https://pokemondb.net/pokedex/national');
+        if (!res.ok) throw new Error('Failed to fetch pokedex');
+        const text = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        // find each row anchor; many pages use .ent-name or anchor inside table. We'll collect anchor text -> href heuristically.
+        const anchors = doc.querySelectorAll('a[href*="/pokedex/"]');
+        const map = {};
+        anchors.forEach(a => {
+          const name = a.textContent && a.textContent.trim().toLowerCase();
+          const href = a.getAttribute('href');
+          if (name && href && !href.includes('#')) {
+            // Normalize to absolute URL
+            const full = href.startsWith('http') ? href : new URL(href, 'https://pokemondb.net').href;
+            if (!map[name]) map[name] = full;
+          }
+        });
+        pokedexIndex = map;
+        log('Pokedex index cached');
+        return pokedexIndex;
+      } catch (e) {
+        log('Pokedex fetch/parse error: ' + (e && e.message ? e.message : e));
+        return {};
+      }
+    }
+
+    // Given a name, return the pokedex URL if found
+    async function findPokedexUrlByName(name) {
+      if (!name) return null;
+      const index = await ensurePokedexIndex();
+      return index[name.toLowerCase()] || null;
+    }
+
+    // Capture & scan card
+    async function scanCard() {
+      try {
+        if (!cameraStream) {
+          await startCamera();
+          // if still not started, bail
+          if (!cameraStream) return log('Camera not available for scan');
+        }
+
+        if (!videoEl || videoEl.readyState < 2) {
+          // not enough video data
+          log('Camera not ready yet');
+          return;
+        }
+
+        log('Capturing image...');
+        const canvas = document.createElement('canvas');
+        // Use video natural size but constrain to our interface viewport
+        canvas.width = 240;
+        canvas.height = 282;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        const imageBase64Full = canvas.toDataURL('image/jpeg');
+        const imageBase64 = imageBase64Full.split(',')[1];
+
+        log('Sending image to LLM for extraction');
+        // Build prompt for LLM
+        const prompt = 'Extract from creature card: name (single word or phrase), type, short description. Output valid JSON with keys name, type, description.';
+
+        let llmResponse;
+        try {
+          llmResponse = await sendToLLM({ llm: prompt, imageBase64: imageBase64 }, true);
+        } catch (e) {
+          log('LLM send failed: ' + (e && e.message ? e.message : e));
+          return;
+        }
+
+        // Response normalization: platform may return { message: '...json...' } or raw JSON
+        let respObj = llmResponse;
+        if (typeof llmResponse === 'object' && llmResponse !== null && typeof llmResponse.message === 'string') {
+          try {
+            respObj = JSON.parse(llmResponse.message);
+          } catch (e) {
+            // if message not JSON, keep as-is
+            try { respObj = JSON.parse(JSON.stringify(llmResponse)); } catch(e2){}
+          }
+        }
+
+        if (!respObj || !respObj.name) {
+          log('LLM did not return a valid name');
+          return;
+        }
+
+        const detectedName = respObj.name.trim();
+        log('LLM detected name: ' + detectedName);
+
+        // Find pokedex URL
+        const url = await findPokedexUrlByName(detectedName);
+        if (!url) {
+          log('No pokedex URL found for: ' + detectedName);
+        } else {
+          log('Found pokedex URL: ' + url);
+        }
+
+        // Build entry
+        const entry = {
+          name: detectedName,
+          type: respObj.type || (respObj.types ? respObj.types.join('/') : ''),
+          description: respObj.description || '',
+          pokedexUrl: url || '',
+          capturedAt: new Date().toISOString()
+        };
+
+        // Save entry
+        saveEntry(entry);
+        log('Entry saved: ' + detectedName);
+
+        // Update UI
+        updateGallery();
+        switchView('rabbitdex');
+        showDetail( (storageGet('rabbitdex') || []).length - 1 );
+      } catch (e) {
+        log('Scan error: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // Save entry to storage
+    function saveEntry(entry) {
+      const entries = storageGet('rabbitdex', []);
+      entries.push(entry);
+      storageSet('rabbitdex', entries);
+      updateDebug();
+    }
+
+    // Update gallery UI
+    function updateGallery() {
+      const list = document.getElementById('rabbitdex-list');
+      list.innerHTML = '';
+      const entries = storageGet('rabbitdex', []);
+      entries.forEach((entry, i) => {
+        const li = document.createElement('li');
+        const img = document.createElement('img');
+        // Try to use pokedex image if available from pokemondb thumbnails: attempt to create plausible thumbnail
+        // Otherwise placeholder.
+        if (entry.pokedexUrl) {
+          // derive sprite url heuristically by replacing /pokedex/name with /pokedex/images or use placeholder
+          img.src = 'https://via.placeholder.com/96?text=?';
+        } else {
+          img.src = 'https://via.placeholder.com/96?text=?';
+        }
+        img.alt = entry.name;
+        const label = document.createElement('div');
+        label.style.flex = '1';
+        label.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:11px">${entry.type || ''}</div>`;
+        li.appendChild(img);
+        li.appendChild(label);
+        li.onclick = () => {
+          showDetail(i);
+          if (entry.pokedexUrl) {
+            // open in new tab/window
+            window.open(entry.pokedexUrl, '_blank');
+          } else {
+            log('No external page saved for this entry');
+          }
+        };
+        list.appendChild(li);
+      });
+      updateDebug();
+    }
+
+    // Show detail for saved entry
     function showDetail(index) {
-      const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[index];
-      document.getElementById('detail').innerText = `${entry.name} (${entry.type}): ${entry.description}`;
+      const entries = storageGet('rabbitdex', []);
+      if (!entries || !entries[index]) return;
       currentIndex = index;
+      const entry = entries[index];
+      const detail = document.getElementById('detail');
+      detail.innerHTML = `
+        <div style="font-weight:bold">${entry.name}</div>
+        <div style="font-size:12px">${entry.type || ''}</div>
+        <div style="font-size:12px; margin-top:6px">${entry.description || 'No description'}</div>
+        <div style="margin-top:6px"><a class="collection-link" href="${entry.pokedexUrl || '#'}" target="_blank">${entry.pokedexUrl ? 'Open pokedex page' : 'No saved page'}</a></div>
+      `;
+      updateDebug();
     }
 
-    function log(message) {
-      const logDiv = document.getElementById('camera-log');
-      logDiv.innerText += `${message}\n`;
-      logDiv.scrollTop = logDiv.scrollHeight;
-    }
-
+    // View switching
     function switchView(view) {
-      views.forEach(v => document.getElementById(v).classList.add('hidden'));
-      document.getElementById(view).classList.remove('hidden');
-      ['home-controls', 'camera-controls', 'rabbitdex-controls'].forEach(c => document.getElementById(c).style.display = 'none');
-      document.getElementById(view + '-controls').style.display = 'grid';
+      views.forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.classList.add('hidden');
+        const control = document.getElementById(v + '-controls');
+        if (control) control.style.display = 'none';
+      });
+      const showEl = document.getElementById(view);
+      if (showEl) showEl.classList.remove('hidden');
+      const showCtrl = document.getElementById(view + '-controls');
+      if (showCtrl) showCtrl.style.display = 'grid';
       currentView = view;
+      updateDebug();
     }
 
-    // Event Listeners
+    // Event listeners (buttons)
     document.getElementById('start-camera').addEventListener('click', startCamera);
     document.getElementById('stop-camera').addEventListener('click', stopCamera);
     document.getElementById('scan').addEventListener('click', scanCard);
     document.getElementById('go-to-camera').addEventListener('click', () => switchView('camera'));
-    document.getElementById('go-to-rabbitdex').addEventListener('click', () => {
-      switchView('rabbitdex');
-      updateGallery();
-    });
+    document.getElementById('go-to-rabbitdex').addEventListener('click', () => { switchView('rabbitdex'); updateGallery(); });
     document.getElementById('exit-camera').addEventListener('click', () => switchView('home'));
     document.getElementById('exit-rabbitdex').addEventListener('click', () => switchView('home'));
+    document.getElementById('narrate').addEventListener('click', async () => {
+      const entries = storageGet('rabbitdex', []);
+      if (!entries || !entries[currentIndex]) return log('No entry to narrate');
+      const e = entries[currentIndex];
+      const prompt = `Speak this RabbitDex entry aloud in a robotic voice: ${e.name}, the ${e.type} creature. ${e.description}`;
+      try {
+        await sendToLLM({ llm: prompt }, true);
+        log('Narration request sent to LLM');
+      } catch (err) {
+        log('Narration failed: ' + (err && err.message ? err.message : err));
+      }
+    });
 
-    // Hardware Controls (Per PDF Core SDK APIs)
+    // Hardware event listeners (SDK events)
     window.addEventListener('scrollUp', () => {
       if (currentView === 'rabbitdex') {
-        const entries = document.getElementById('rabbitdex-list').children;
+        const entries = storageGet('rabbitdex', []);
         if (currentIndex > 0) showDetail(--currentIndex);
       }
     });
     window.addEventListener('scrollDown', () => {
       if (currentView === 'rabbitdex') {
-        const entries = document.getElementById('rabbitdex-list').children;
+        const entries = storageGet('rabbitdex', []);
         if (currentIndex < entries.length - 1) showDetail(++currentIndex);
       }
     });
     window.addEventListener('longPressStart', () => {
-      if (currentView === 'rabbitdex' && document.getElementById('detail').innerText) {
-        const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[currentIndex];
-        PluginMessageHandler.postMessage(JSON.stringify({
-          llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}`,
-          response: true
-        }));
-      }
-    });
-    window.addEventListener('touch', (e) => {
-      const touch = e.touches[0];
-      const cameraBtn = document.getElementById('scan');
-      const narrateBtn = document.getElementById('narrate');
-      if (currentView === 'camera' && cameraBtn.contains(touch.target)) scanCard();
-      if (currentView === 'rabbitdex' && narrateBtn.contains(touch.target)) {
-        const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[currentIndex];
-        PluginMessageHandler.postMessage(JSON.stringify({
-          llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}`,
-          response: true
-        }));
+      if (currentView === 'rabbitdex') {
+        const entries = storageGet('rabbitdex', []);
+        if (!entries || !entries[currentIndex]) return;
+        const entry = entries[currentIndex];
+        const prompt = `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}`;
+        sendToLLM({ llm: prompt }, true).catch(()=>log('Narration failed'));
       }
     });
 
-    // Start on home screen
+    // Touch handling (use touchstart)
+    window.addEventListener('touchstart', (e) => {
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      // emulate click via bounding containment
+      const scanBtn = document.getElementById('scan');
+      const narrateBtn = document.getElementById('narrate');
+      if (currentView === 'camera' && scanBtn && scanBtn.contains(t.target)) {
+        scanCard();
+      }
+      if (currentView === 'rabbitdex' && narrateBtn && narrateBtn.contains(t.target)) {
+        const entries = storageGet('rabbitdex', []);
+        if (entries && entries[currentIndex]) {
+          const entry = entries[currentIndex];
+          sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}` }, true).catch(()=>log('Narration failed'));
+        }
+      }
+    }, { passive: true });
+
+    // Initial state
     document.getElementById('home-controls').style.display = 'grid';
     switchView('home');
+    updateDebug();
   </script>
 </body>
 </html>
