@@ -108,19 +108,16 @@
 
   <script>
     let cameraStream, currentView = 'home', currentIndex = 0, rabbitdexData;
-    const llmResponses = {}; // To match requests to responses by ID
+    let pendingLLMResolve = null; // For single request assumption
 
     const views = ['home', 'camera', 'rabbitdex'];
 
     // Listener for LLM responses
     window.onPluginMessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'llm_response') {
-        const resolve = llmResponses[data.id];
-        if (resolve) {
-          resolve(data);
-          delete llmResponses[data.id];
-        }
+      if (data.type === 'llm_response' && pendingLLMResolve) {
+        pendingLLMResolve(data);
+        pendingLLMResolve = null;
       }
     };
 
@@ -179,11 +176,9 @@
         const imageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
         log('Image captured, sending to LLM...');
 
-        const id = Math.random().toString(36).substr(2, 9); // Unique ID for response matching
         const response = await new Promise(resolve => {
-          llmResponses[id] = resolve;
+          pendingLLMResolve = resolve;
           PluginMessageHandler.postMessage(JSON.stringify({
-            id, // Add ID to message
             llm: 'Extract from creature card: name, type, description. Output as JSON.',
             imageBase64,
             response: true
