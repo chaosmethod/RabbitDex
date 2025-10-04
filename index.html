@@ -36,12 +36,13 @@
       margin: 2px;
       display: inline-block;
       cursor: pointer;
-      width: 120px; /* Increased width to fit longer text */
+      width: 105px; /* Reduced width to prevent overflow */
       height: 30px; /* Uniform height */
       text-align: center; /* Center text */
       white-space: nowrap; /* Prevent wrapping */
       overflow: hidden; /* Hide overflow if needed */
       text-overflow: ellipsis; /* Ellipsis for too long text */
+      box-sizing: border-box; /* Include border/padding in width */
     }
     #rabbitdex-list img { width: 60px; vertical-align: middle; }
     #rabbitdex-list li { margin: 5px 0; }
