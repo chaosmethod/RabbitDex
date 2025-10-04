@@ -36,35 +36,39 @@
       margin: 2px;
       display: inline-block;
       cursor: pointer;
-      width: 90px; /* Adjusted for 2x2 fit */
+      width: 105px; /* Reduced width to prevent overflow */
       height: 30px; /* Uniform height */
+      text-align: center; /* Center text */
+      white-space: nowrap; /* Prevent wrapping */
+      overflow: hidden; /* Hide overflow if needed */
+      text-overflow: ellipsis; /* Ellipsis for too long text */
+      box-sizing: border-box; /* Include border/padding in width */
     }
     #rabbitdex-list img { width: 60px; vertical-align: middle; }
     #rabbitdex-list li { margin: 5px 0; }
     #detail { padding: 10px; }
     .exit-btn { background: #AAA; padding: 3px; }
     .hidden { display: none; }
-    #home .button { display: block; margin: 5px auto; }
     #menu-area {
       position: absolute;
-      top: 210px; /* Below screen (180px) + 30px margin, approximating blue area */
+      top: 210px; /* Below screen (180px) + 30px margin, approximating position but in red */
       left: 50%;
       transform: translateX(-50%);
       width: 220px;
-      background: #00F; /* Blue placeholder for your image's area */
       padding: 5px 0;
       text-align: center;
     }
-    #camera-controls, #rabbitdex-controls {
+    #camera-controls, #rabbitdex-controls, #home-controls {
       display: grid;
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
       gap: 5px;
-      width: 190px; /* Fit two buttons wide */
+      width: 220px; /* Full width for perfect centering */
       margin: 0 auto;
+      display: none; /* Hidden by default */
     }
-    #rabbitdex-controls {
-      grid-template-rows: 1fr; /* 1x2 grid for Narrate and Exit */
+    #rabbitdex-controls, #home-controls {
+      grid-template-rows: 1fr; /* 1x2 grid for two buttons */
     }
     video { width: 100%; height: auto; }
     #camera-log { position: absolute; bottom: 40px; left: 10px; width: 200px; height: 20px; overflow-y: auto; font-size: 10px; }
@@ -81,27 +85,25 @@
       <ul id="rabbitdex-list"></ul>
       <div id="detail"></div>
     </section>
-    <section id="home">
-      <button id="go-to-camera" class="button">Scan Creature</button>
-      <button id="go-to-rabbitdex" class="button">View RabbitDex</button>
-      <button id="exit-app" class="exit-btn button">Exit</button>
+    <section id="home" class="hidden">
+      <!-- No buttons here, moved to menu-area -->
     </section>
   </div>
   <div id="menu-area">
-    <section id="camera" class="hidden">
-      <div id="camera-controls">
-        <button id="start-camera" class="button">Start</button>
-        <button id="stop-camera" class="button">Stop</button>
-        <button id="scan" class="button">Scan</button>
-        <button id="exit-camera" class="exit-btn button">Exit</button>
-      </div>
-    </section>
-    <section id="rabbitdex" class="hidden">
-      <div id="rabbitdex-controls">
-        <button id="narrate" class="button">Narrate</button>
-        <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
-      </div>
-    </section>
+    <div id="camera-controls">
+      <button id="start-camera" class="button">Start</button>
+      <button id="stop-camera" class="button">Stop</button>
+      <button id="scan" class="button">Scan</button>
+      <button id="exit-camera" class="exit-btn button">Exit</button>
+    </div>
+    <div id="rabbitdex-controls">
+      <button id="narrate" class="button">Narrate</button>
+      <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
+    </div>
+    <div id="home-controls">
+      <button id="go-to-camera" class="button">Scan Creature</button>
+      <button id="go-to-rabbitdex" class="button">RabbitDex</button>
+    </div>
   </div>
 
   <script>
@@ -221,6 +223,8 @@
     function switchView(view) {
       views.forEach(v => document.getElementById(v).classList.add('hidden'));
       document.getElementById(view).classList.remove('hidden');
+      ['home-controls', 'camera-controls', 'rabbitdex-controls'].forEach(c => document.getElementById(c).style.display = 'none');
+      document.getElementById(view + '-controls').style.display = 'grid';
       currentView = view;
     }
 
@@ -235,7 +239,6 @@
     });
     document.getElementById('exit-camera').addEventListener('click', () => switchView('home'));
     document.getElementById('exit-rabbitdex').addEventListener('click', () => switchView('home'));
-    document.getElementById('exit-app').addEventListener('click', () => window.closeWebView.postMessage({}));
 
     // Hardware Controls (Per PDF Core SDK APIs)
     window.addEventListener('scrollUp', () => {
@@ -274,6 +277,7 @@
     });
 
     // Start on home screen
+    document.getElementById('home-controls').style.display = 'grid';
     switchView('home');
   </script>
 </body>
