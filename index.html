@@ -36,13 +36,12 @@
       margin: 2px;
       display: inline-block;
       cursor: pointer;
-      width: 105px; /* Reduced width to prevent overflow */
+      width: 120px; /* Increased width to fit longer text */
       height: 30px; /* Uniform height */
       text-align: center; /* Center text */
       white-space: nowrap; /* Prevent wrapping */
       overflow: hidden; /* Hide overflow if needed */
       text-overflow: ellipsis; /* Ellipsis for too long text */
-      box-sizing: border-box; /* Include border/padding in width */
     }
     #rabbitdex-list img { width: 60px; vertical-align: middle; }
     #rabbitdex-list li { margin: 5px 0; }
@@ -108,8 +107,21 @@
 
   <script>
     let cameraStream, currentView = 'home', currentIndex = 0, rabbitdexData;
+    const llmResponses = {}; // To match requests to responses by ID
 
     const views = ['home', 'camera', 'rabbitdex'];
+
+    // Listener for LLM responses
+    window.onPluginMessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'llm_response') {
+        const resolve = llmResponses[data.id];
+        if (resolve) {
+          resolve(data);
+          delete llmResponses[data.id];
+        }
+      }
+    };
 
     async function startCamera() {
       try {
@@ -166,12 +178,15 @@
         const imageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
         log('Image captured, sending to LLM...');
 
+        const id = Math.random().toString(36).substr(2, 9); // Unique ID for response matching
         const response = await new Promise(resolve => {
+          llmResponses[id] = resolve;
           PluginMessageHandler.postMessage(JSON.stringify({
+            id, // Add ID to message
             llm: 'Extract from creature card: name, type, description. Output as JSON.',
             imageBase64,
             response: true
-          }), resolve);
+          }));
         });
         log('LLM response received: ' + response.message);
         const cardData = JSON.parse(response.message);
