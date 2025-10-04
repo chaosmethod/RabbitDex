@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #FF0000; /* Red RabbitDex body */
+      font-family: 'Courier New', monospace; /* Pixel font */
+      color: #000;
+      height: 282px; /* Full viewport height */
+      overflow: hidden;
+    }
+    #screen {
+      background: #000; /* Black screen */
+      border: 2px solid #FFF;
+      width: 220px;
+      height: 180px;
+      margin: 20px auto;
+      position: relative;
+      overflow-y: auto;
+      border-radius: 5px;
+    }
+    #top-hinge {
+      background: #666;
+      height: 10px;
+      width: 220px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .button {
+      background: #DDD;
+      border: 1px solid #000;
+      padding: 5px;
+      margin: 2px;
+      display: inline-block;
+      cursor: pointer;
+      width: 90px; /* Fixed width for consistency */
+    }
+    #rabbitdex-list img { width: 60px; vertical-align: middle; }
+    #rabbitdex-list li { margin: 5px 0; }
+    #detail { padding: 10px; }
+    .exit-btn { position: absolute; bottom: 5px; right: 5px; background: #AAA; padding: 3px; }
+    .hidden { display: none; }
+    #home .button { display: block; margin: 5px auto; } /* Stack home buttons vertically */
+  </style>
+</head>
+<body>
+  <div id="top-hinge"></div>
+  <div id="screen">
+    <section id="camera" class="hidden">
+      <button id="start-camera" class="button">Start</button>
+      <button id="stop-camera" class="button">Stop</button>
+      <button id="scan" class="button">Scan</button>
+      <video id="camera-preview" autoplay playsinline></video>
+      <div id="camera-log" class="log"></div>
+      <button id="exit-camera" class="exit-btn button">Exit</button>
+    </section>
+    <section id="rabbitdex" class="hidden">
+      <ul id="rabbitdex-list"></ul>
+      <button id="narrate" class="button">Narrate (PTT)</button>
+      <div id="detail"></div>
+      <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
+    </section>
+    <section id="home">
+      <button id="go-to-camera" class="button">Scan Creature</button>
+      <button id="go-to-rabbitdex" class="button">View RabbitDex</button>
+      <button id="exit-app" class="exit-btn button">Exit</button>
+    </section>
+  </div>
+
+  <script>
+    let cameraStream, currentView = 'home', currentIndex = 0, rabbitdexData;
+    const views = ['home', 'camera', 'rabbitdex'];
+
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        document.getElementById('camera-preview').srcObject = cameraStream;
+        log('Camera preview started');
+      } catch (e) { log(`Camera error: ${e.message}`); }
+    }
+
+    function stopCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        document.getElementById('camera-preview').srcObject = null;
+        log('Camera stopped');
+      }
+    }
+
+    async function fetchRabbitdexData() {
+      if (!rabbitdexData) {
+        const response = await fetch('https://pokemondb.net/pokedex/national');
+        const text = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const rows = doc.querySelectorAll('#pokedex tbody tr');
+        rabbitdexData = Array.from(rows).map(row => {
+          const cols = row.querySelectorAll('td');
+          const name = cols[1].querySelector('a').textContent.trim().toLowerCase();
+          const types = Array.from(cols[2].querySelectorAll('.type-icon')).map(t => t.title.split(' ')[0].toLowerCase());
+          const descLink = cols[3].querySelector('a');
+          const description = descLink ? descLink.getAttribute('data-description') || 'No description available' : 'No description available';
+          const img = cols[1].querySelector('img');
+          const imageUrl = img ? `https://img.pokemondb.net${img.getAttribute('src')}` : 'https://via.placeholder.com/96?text=?';
+          return { name, types, description, imageUrl };
+        });
+        window.creationStorage.plain.setItem('rabbitdexData', JSON.stringify(rabbitdexData));
+      }
+      return rabbitdexData;
+    }
+
+    async function getImageUrl(name) {
+      const data = await fetchRabbitdexData();
+      const entry = data.find(p => p.name === name.toLowerCase());
+      return entry ? entry.imageUrl : 'https://via.placeholder.com/96?text=?';
+    }
+
+    async function scanCard() {
+      if (!cameraStream) await startCamera();
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 240; canvas.height = 282;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(document.getElementById('camera-preview'), 0, 0, 240, 282);
+        const imageBase64 = canvas.toDataURL('image/jpeg').split(',')[1];
+
+        const response = await new Promise(resolve => {
+          PluginMessageHandler.postMessage(JSON.stringify({
+            llm: 'Extract from creature card: name, type, description. Output as JSON.',
+            imageBase64,
+            response: true
+          }), resolve);
+        });
+        const cardData = JSON.parse(response.message);
+        if (cardData.name) {
+          const rabbitdexEntry = (await fetchRabbitdexData()).find(p => p.name === cardData.name.toLowerCase());
+          cardData.imageUrl = rabbitdexEntry ? rabbitdexEntry.imageUrl : await getImageUrl(cardData.name);
+          cardData.type = rabbitdexEntry ? rabbitdexEntry.types.join('/') : cardData.type;
+          cardData.description = rabbitdexEntry ? rabbitdexEntry.description : cardData.description;
+          saveEntry(cardData);
+          switchView('rabbitdex');
+          updateGallery();
+        }
+      } catch (e) { log(`Scan error: ${e.message}`); }
+    }
+
+    function saveEntry(data) {
+      let entries = JSON.parse(window.creationStorage.plain.getItem('rabbitdex') || '[]');
+      entries.push(data);
+      window.creationStorage.plain.setItem('rabbitdex', JSON.stringify(entries));
+    }
+
+    function updateGallery() {
+      const list = document.getElementById('rabbitdex-list');
+      list.innerHTML = '';
+      const entries = JSON.parse(window.creationStorage.plain.getItem('rabbitdex') || '[]');
+      entries.forEach((entry, i) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<img src="${entry.imageUrl}" alt="${entry.name}"> ${entry.name}`;
+        li.onclick = () => showDetail(i);
+        list.appendChild(li);
+      });
+    }
+
+    function showDetail(index) {
+      const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[index];
+      document.getElementById('detail').innerText = `${entry.name} (${entry.type}): ${entry.description}`;
+      currentIndex = index;
+    }
+
+    function log(message) {
+      const logDiv = document.getElementById('camera-log');
+      logDiv.innerText += `${message}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function switchView(view) {
+      views.forEach(v => document.getElementById(v).classList.add('hidden'));
+      document.getElementById(view).classList.remove('hidden');
+      currentView = view;
+    }
+
+    // Event Listeners
+    document.getElementById('start-camera').addEventListener('click', startCamera);
+    document.getElementById('stop-camera').addEventListener('click', stopCamera);
+    document.getElementById('scan').addEventListener('click', scanCard);
+    document.getElementById('go-to-camera').addEventListener('click', () => switchView('camera'));
+    document.getElementById('go-to-rabbitdex').addEventListener('click', () => {
+      switchView('rabbitdex');
+      updateGallery();
+    });
+    document.getElementById('exit-camera').addEventListener('click', () => switchView('home'));
+    document.getElementById('exit-rabbitdex').addEventListener('click', () => switchView('home'));
+    document.getElementById('exit-app').addEventListener('click', () => window.closeWebView.postMessage({}));
+
+    // Hardware Controls (Per PDF Core SDK APIs)
+    window.addEventListener('scrollUp', () => {
+      if (currentView === 'rabbitdex') {
+        const entries = document.getElementById('rabbitdex-list').children;
+        if (currentIndex > 0) showDetail(--currentIndex);
+      }
+    });
+    window.addEventListener('scrollDown', () => {
+      if (currentView === 'rabbitdex') {
+        const entries = document.getElementById('rabbitdex-list').children;
+        if (currentIndex < entries.length - 1) showDetail(++currentIndex);
+      }
+    });
+    window.addEventListener('longPressStart', () => {
+      if (currentView === 'rabbitdex' && document.getElementById('detail').innerText) {
+        const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[currentIndex];
+        PluginMessageHandler.postMessage(JSON.stringify({
+          llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}`,
+          response: true
+        }));
+      }
+    });
+    window.addEventListener('touch', (e) => {
+      const touch = e.touches[0];
+      const cameraBtn = document.getElementById('scan');
+      const narrateBtn = document.getElementById('narrate');
+      if (currentView === 'camera' && cameraBtn.contains(touch.target)) scanCard();
+      if (currentView === 'rabbitdex' && narrateBtn.contains(touch.target)) {
+        const entry = JSON.parse(window.creationStorage.plain.getItem('rabbitdex'))[currentIndex];
+        PluginMessageHandler.postMessage(JSON.stringify({
+          llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}`,
+          response: true
+        }));
+      }
+    });
+
+    // Start on home screen
+    switchView('home');
+  </script>
+</body>
+</html>
