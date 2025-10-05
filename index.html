@@ -1,106 +1,126 @@
-<!-- Paste this inside your <body> near menu-area or anywhere visible -->
-<button id="ptt-test-button" style="position:fixed;left:8px;top:8px;z-index:1000;padding:6px;background:#0f0;border:1px solid #000">PTT TEST</button>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PTT Diagnostic</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html,body{height:100%;margin:0;padding:0;font-family:Arial,monospace;background:#000;color:#fff;}
+    #screen{width:220px;height:180px;margin:12px auto 6px;border:2px solid #fff;background:#111;display:flex;align-items:center;justify-content:center;border-radius:6px;position:relative;overflow:hidden;}
+    #camera-preview{width:100%;height:100%;object-fit:cover;background:#222;display:block;}
+    #overlay-log{position:fixed;right:8px;top:8px;background:rgba(0,0,0,0.7);color:#0f0;padding:8px;border-radius:6px;font-size:12px;max-width:260px;white-space:pre-line;z-index:9999;}
+    #ptt-test-button{position:fixed;left:8px;top:8px;z-index:10000;padding:8px 10px;background:#0f0;border-radius:6px;color:#000;font-weight:bold;border:2px solid #060;cursor:pointer;touch-action:manipulation;}
+    #instructions{width:220px;margin:6px auto 0;color:#fff;font-size:12px;text-align:center;}
+    button{font:inherit}
+  </style>
+</head>
+<body>
+  <div id="ptt-test-button" aria-label="PTT Test">PTT TEST</div>
+  <div id="screen">
+    <video id="camera-preview" autoplay playsinline></video>
+  </div>
+  <div id="instructions">Tap PTT TEST or press Space/KeyP. Watch logs (right).</div>
+  <div id="overlay-log">logs...</div>
 
 <script>
-/* Expanded PTT binding and diagnostics */
-(function bindPTTRobust() {
-  const pttButton = document.getElementById('ptt-test-button');
+  (function(){
+    const logEl = document.getElementById('overlay-log');
+    const pttBtn = document.getElementById('ptt-test-button');
+    const videoEl = document.getElementById('camera-preview');
+    let cameraStream = null;
+    function appendLog(s){ const t = new Date().toISOString().slice(11,19); logEl.textContent = `[${t}] ${s}\n` + logEl.textContent; }
 
-  function logEventRaw(name, ev) {
-    // stringify small useful fields only
-    try {
-      const short = {
-        type: ev && ev.type,
-        detail: ev && ev.detail,
-        key: ev && ev.key,
-        which: ev && ev.which,
-        timeStamp: Math.round(ev.timeStamp || 0)
-      };
-      log(`[PTT-RAW] ${name} ${JSON.stringify(short)}`);
-    } catch (e) {
-      log(`[PTT-RAW] ${name} (error serializing event)`);
-    }
-  }
-
-  async function pttHandlerWrapper(source) {
-    log(`[PTT] triggered from ${source}`);
-    try {
-      if (window._pttBusy) { log('[PTT] busy, ignoring'); return; }
-      window._pttBusy = true;
-      await doScanAndProcess();
-    } catch (e) {
-      log('[PTT] handler error: ' + (e && e.message ? e.message : e));
-    } finally {
-      setTimeout(() => { window._pttBusy = false; }, 700);
-    }
-  }
-
-  // Candidate event names (common variations and SDK names)
-  const names = [
-    'sideClick', 'sideclick', 'ptt', 'PTT', 'hardwarePTT',
-    'buttonpress', 'buttonPress', 'press', 'pressDown',
-    'side-button', 'side_button'
-  ];
-
-  // Attach direct listeners to window and document and capture phase
-  names.forEach(n => {
-    try {
-      window.addEventListener(n, function(ev){ logEventRaw(n, ev); pttHandlerWrapper(`window:${n}`); }, true);
-      document.addEventListener(n, function(ev){ logEventRaw(n, ev); pttHandlerWrapper(`document:${n}`); }, true);
-    } catch (e) {
-      // ignore attaching errors
-    }
-  });
-
-  // Also attach generic 'message' and custom envelopes — some runtimes post messages
-  window.addEventListener('message', function(ev){
-    logEventRaw('message', ev);
-    // if message.data indicates PTT, trigger
-    try {
-      const d = ev && ev.data;
-      if (d && (d.type === 'ptt' || d.event === 'sideClick' || d.action === 'ptt')) {
-        pttHandlerWrapper('message:event');
+    async function startCamera() {
+      appendLog('startCamera() called');
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        videoEl.srcObject = cameraStream;
+        await videoEl.play().catch(()=>{});
+        appendLog('Camera started (preview attached)');
+      } catch (e) {
+        appendLog('Camera start error: ' + (e && e.message ? e.message : e));
       }
-    } catch(e){}
-  });
-
-  // Keyboard fallback for testing: Space or KeyP
-  window.addEventListener('keydown', function(ev){
-    if (ev.code === 'Space' || ev.code === 'KeyP') {
-      logEventRaw('keydown', ev);
-      pttHandlerWrapper('keyboard');
-      ev.preventDefault();
     }
-  });
+    async function captureTestImage() {
+      if (!cameraStream) {
+        appendLog('Camera not started — starting now');
+        await startCamera();
+        await new Promise(r => setTimeout(r, 200));
+      }
+      if (!videoEl || videoEl.readyState < 2) { appendLog('Video not ready (readyState='+ (videoEl ? videoEl.readyState : 'no') +')'); }
+      try {
+        const c = document.createElement('canvas');
+        c.width = 240; c.height = 282;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, c.width, c.height);
+        const dataUrl = c.toDataURL('image/jpeg');
+        appendLog('Captured image length: ' + dataUrl.length);
+        return dataUrl;
+      } catch (err) {
+        appendLog('capture error: ' + (err && err.message ? err.message : err));
+        throw err;
+      }
+    }
 
-  // Visible test button trigger
-  if (pttButton) {
-    pttButton.addEventListener('click', function(ev){
-      logEventRaw('ptt-test-button', ev);
-      pttHandlerWrapper('ptt-test-button');
-    });
-  }
+    // Core PTT handler (used by hardware & simulated)
+    async function handlePTT(source) {
+      appendLog('PTT fired from: ' + source);
+      try {
+        await captureTestImage();
+        appendLog('Simulated scan complete');
+      } catch (e) {
+        appendLog('PTT handler error: ' + (e && e.message ? e.message : e));
+      }
+    }
 
-  // Periodic ping to check whether any of the event listeners are being hit (diagnostic)
-  let pttSeen = false;
-  const originalLog = log;
-  // wrap log to detect PTT logs
-  window.log = function(msg){
-    originalLog(msg);
-    try {
-      if (typeof msg === 'string' && msg.includes('[PTT-RAW]')) pttSeen = true;
-    } catch(e){}
-  };
+    // Attach DOM-ready safe listeners
+    function attachListeners() {
+      // pointer/click/touch for the visible button
+      pttBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); appendLog('pointerdown on PTT button'); handlePTT('ptt-test-button-pointer'); }, {passive:false});
+      pttBtn.addEventListener('click', (e) => { appendLog('click on PTT button'); handlePTT('ptt-test-button-click'); });
 
-  // After 10s, if no PTT-RAW seen, provide instruction in log
-  setTimeout(() => {
-    if (!pttSeen) {
-      log('[PTT-DIAG] No raw PTT events observed; use green PTT TEST button or press Space/KeyP to simulate PTT and verify capture path');
+      // keyboard fallback
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' || e.code === 'KeyP') {
+          appendLog('keyboard -> ' + e.code);
+          handlePTT('keyboard');
+          e.preventDefault();
+        }
+      });
+
+      // many possible hardware event names on both window and document (capture phase)
+      const eventNames = ['sideClick','sideclick','side-button','side_button','ptt','PTT','buttonpress','press','pressDown','hardwarePTT'];
+      eventNames.forEach(name => {
+        try {
+          window.addEventListener(name, (ev) => { appendLog('[RAW] window.'+name+' event'); appendLog(JSON.stringify({type:ev.type, detail: ev.detail || null, time:Math.round(ev.timeStamp||0)})); handlePTT('window:'+name); }, true);
+          document.addEventListener(name, (ev) => { appendLog('[RAW] document.'+name+' event'); appendLog(JSON.stringify({type:ev.type, detail: ev.detail || null, time:Math.round(ev.timeStamp||0)})); handlePTT('document:'+name); }, true);
+        } catch (e) {
+          appendLog('listener attach failed for ' + name);
+        }
+      });
+
+      // message envelope (some runtimes post message envelopes)
+      window.addEventListener('message', (ev) => {
+        appendLog('[RAW] message event data: ' + (typeof ev.data === 'string' ? ev.data.slice(0,200) : JSON.stringify(ev.data)));
+        try {
+          const d = ev.data;
+          if (d && (d.type === 'ptt' || d.event === 'sideClick' || d.action === 'ptt')) handlePTT('message:event');
+        } catch(e){}
+      });
+
+      appendLog('Listeners attached: pointer, click, keyboard, message, many hardware names');
+    }
+
+    // Ensure listeners attach after DOM ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', attachListeners);
     } else {
-      log('[PTT-DIAG] PTT raw events observed');
+      attachListeners();
     }
-  }, 10000);
 
-  log('[PTT-DIAG] Expanded PTT listeners installed (many event names, message, keyboard, test button)');
-})();
+    // Also auto-start camera so you can see preview (optional)
+    startCamera().catch(()=>{});
+  })();
 </script>
+</body>
+</html>
