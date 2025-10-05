@@ -1,98 +1,468 @@
-<script>
-// Capture helper: returns base64 (without data: prefix) or throws
-async function captureImageBase64() {
-  if (!cameraStream) {
-    await startCamera();
-    if (!cameraStream) throw new Error('Camera not available');
-  }
-  if (!videoEl || videoEl.readyState < 2) throw new Error('Camera not ready');
-  const canvas = document.createElement('canvas');
-  canvas.width = 240;
-  canvas.height = 282;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-  return dataUrl.split(',')[1];
-}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>RabbitDex Patched</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #FF0000;
+      font-family: 'Courier New', monospace;
+      color: #000;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #top-hinge { background: #666; height: 10px; width: 220px; margin-top: 10px; border-radius: 3px; }
+    #screen {
+      background: #000; border: 2px solid #FFF; width: 220px; height: 180px;
+      margin: 12px 0; position: relative; overflow-y: auto; border-radius: 5px;
+      color: #fff; padding: 6px; box-sizing: border-box;
+    }
+    #menu-area {
+      position: absolute; top: calc(10px + 180px + 30px); left: 50%;
+      transform: translateX(-50%); width: 220px; padding: 5px 0; text-align: center;
+    }
+    .button {
+      background: #DDD; border: 1px solid #000; padding: 5px; margin: 2px;
+      display: inline-block; cursor: pointer; width: 105px; height: 30px;
+      text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      box-sizing: border-box; font-family: inherit;
+    }
+    .exit-btn { background: #AAA; padding: 3px; }
+    .hidden { display: none; }
+    #camera-controls, #rabbitdex-controls, #home-controls { display: none; grid-template-columns: 1fr 1fr; gap: 5px; width: 220px; margin: 0 auto; }
+    video { width: 100%; height: auto; background: #222; border-radius: 3px; }
+    #camera-log { position: absolute; bottom: -36px; left: 10px; width: 200px; height: 30px; overflow-y: auto; font-size: 10px; color: #000; background: #fff; padding: 2px; border-radius: 3px; box-sizing: border-box; }
+    #rabbitdex-list { list-style: none; padding: 0; margin: 0; color: #000; }
+    #rabbitdex-list li { margin: 5px 0; cursor: pointer; display:flex; align-items:center; gap:8px; background:#fff; color:#000; padding:4px; border-radius:4px; }
+    #rabbitdex-list img { width: 48px; height: 48px; object-fit:contain; }
+    #detail { padding: 6px; color: #000; background:#fff; border-radius:4px; margin-top:6px; min-height:36px; font-size:12px; }
+    #debug-overlay { position: fixed; right: 8px; top: 8px; background: rgba(0,0,0,0.6); color: #fff; padding:6px; font-size:11px; border-radius:4px; max-width:260px; z-index:999; display:none; white-space:pre-line; }
+    a.collection-link { color: blue; text-decoration: underline; font-weight:bold; }
+  </style>
+</head>
+<body>
+  <div id="top-hinge"></div>
 
-// Parse LLM reply to a single name string (be lenient)
-function normalizeLLMName(resp) {
-  if (!resp) return null;
-  // If resp is object with name property
-  if (typeof resp === 'object') {
-    if (resp.name && typeof resp.name === 'string') return resp.name.trim();
-    // maybe platform returned { message: '{"name":"Pikachu"}' }
-    if (resp.message && typeof resp.message === 'string') {
+  <div id="screen">
+    <section id="camera" class="hidden" aria-hidden="true">
+      <video id="camera-preview" autoplay playsinline></video>
+      <div id="camera-log" class="log"></div>
+    </section>
+
+    <section id="rabbitdex" class="hidden" aria-hidden="true">
+      <ul id="rabbitdex-list"></ul>
+      <div id="detail"></div>
+    </section>
+
+    <section id="home" class="hidden" aria-hidden="false">
+      <div style="color:#000; background:#fff; padding:6px; border-radius:4px;">RabbitDex Home</div>
+    </section>
+  </div>
+
+  <div id="menu-area">
+    <div id="camera-controls" role="group" aria-label="camera controls">
+      <button id="start-camera" class="button">Start</button>
+      <button id="stop-camera" class="button">Stop</button>
+      <button id="scan" class="button">Scan</button>
+      <button id="exit-camera" class="exit-btn button">Exit</button>
+    </div>
+
+    <div id="rabbitdex-controls" role="group" aria-label="rabbitdex controls">
+      <button id="narrate" class="button">Narrate</button>
+      <button id="exit-rabbitdex" class="exit-btn button">Exit</button>
+    </div>
+
+    <div id="home-controls" role="group" aria-label="home controls">
+      <button id="go-to-camera" class="button">Scan Creature</button>
+      <button id="go-to-rabbitdex" class="button">RabbitDex</button>
+    </div>
+  </div>
+
+  <div id="debug-overlay"></div>
+
+  <script>
+    // ---------- Storage wrapper ----------
+    const storageBackend = (() => {
+      try { if (window.creationStorage && window.creationStorage.plain) return window.creationStorage.plain; } catch(e) {}
+      return localStorage;
+    })();
+
+    function storageGet(key, fallback = null) {
       try {
-        const inner = JSON.parse(resp.message);
-        if (inner && inner.name) return inner.name.trim();
-      } catch(e){}
-      // or message could be plain text name
-      return resp.message.trim();
+        const raw = storageBackend.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) { return fallback; }
     }
-  }
-  // If resp is string, choose first token or full line
-  if (typeof resp === 'string') {
-    // remove punctuation and guidance words
-    let s = resp.trim();
-    // Some LLMs reply with "Pikachu." or "The pokemon is Pikachu"
-    s = s.replace(/^the\s+pokemon\s+is\s+/i, '');
-    s = s.replace(/[^\w\s-']/g, ''); // strip punctuation
-    // prefer single line, return first line
-    s = s.split('\n')[0].trim();
-    return s || null;
-  }
-  return null;
-}
-
-// High-level PTT scan handler
-async function pttScanHandler() {
-  try {
-    log('PTT pressed: capturing image');
-    const imageBase64 = await captureImageBase64();
-    const prompt = 'what is this pokemon in a name only reply';
-    log('Sending to LLM with prompt: "' + prompt + '"');
-    // sendToLLM is the robust wrapper; increase timeout to 20s
-    const llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout: 20000 }).catch(err => { throw err; });
-    log('[LLM] raw response: ' + (typeof llmResp === 'string' ? llmResp.slice(0,200) : JSON.stringify(llmResp).slice(0,200)));
-    const detectedName = normalizeLLMName(llmResp);
-    if (!detectedName) {
-      log('LLM did not return a usable name');
-      return;
+    function storageSet(key, value) {
+      try { storageBackend.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
     }
-    log('Detected name: ' + detectedName);
-    // Search pokedex index for URL
-    const url = await findPokedexUrlByName(detectedName);
-    if (url) log('Found pokedex url: ' + url);
-    else log('Pokedex URL not found for: ' + detectedName);
-    // Build entry and save
-    const entry = {
-      name: detectedName,
-      type: '', // LLM prompt asked for name-only; could do another call if needed
-      description: '',
-      pokedexUrl: url || '',
-      capturedAt: new Date().toISOString()
-    };
-    saveEntry(entry);
-    updateGallery();
-    switchView('rabbitdex');
-    showDetail( (storageGet('rabbitdex') || []).length - 1 );
-  } catch (e) {
-    log('PTT scan error: ' + (e && e.message ? e.message : e));
-  }
-}
 
-// Bind PTT/hardware sideClick event to the handler
-window.addEventListener('sideClick', () => {
-  // Debounce briefly to avoid duplicate triggers
-  if (window._pttBusy) return;
-  window._pttBusy = true;
-  pttScanHandler().finally(() => {
-    // small cooldown
-    setTimeout(() => { window._pttBusy = false; }, 700);
-  });
-});
+    // ---------- Globals & DOM ----------
+    let cameraStream = null;
+    let currentView = 'home';
+    let currentIndex = 0;
+    const views = ['home', 'camera', 'rabbitdex'];
+    const videoEl = document.getElementById('camera-preview');
+    const logDiv = document.getElementById('camera-log');
+    const debug = document.getElementById('debug-overlay');
 
-// Optionally bind longPressStart to narrate if pressed while in rabbitdex
-// (keep existing longPressStart behavior, don't override)
-</script>
+    function log(msg) {
+      const time = new Date().toISOString().split('T')[1].slice(0,8);
+      logDiv.textContent += `[${time}] ${msg}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      updateDebug();
+    }
+    function updateDebug() {
+      const entries = storageGet('rabbitdex') || [];
+      debug.innerText = `View: ${currentView}\nSaved: ${entries.length}\nIndex: ${currentIndex}\nPluginAvailable: ${typeof PluginMessageHandler !== 'undefined' ? 'yes' : 'no'}`;
+      debug.style.display = 'block';
+    }
+
+    // ---------- Camera functions ----------
+    async function startCamera() {
+      try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        videoEl.srcObject = cameraStream;
+        await videoEl.play().catch(()=>{});
+        log('Camera preview started');
+      } catch (e) {
+        log('Camera error: ' + (e && e.message ? e.message : e));
+      }
+    }
+    function stopCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+        videoEl.srcObject = null;
+        log('Camera stopped');
+      }
+    }
+    async function captureImageBase64() {
+      if (!cameraStream) {
+        await startCamera();
+        if (!cameraStream) throw new Error('Camera not available');
+      }
+      if (!videoEl || videoEl.readyState < 2) throw new Error('Camera not ready');
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 282;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      return dataUrl.split(',')[1];
+    }
+
+    // ---------- Robust LLM messaging ----------
+    function logLLM(msg) { try { log('[LLM] ' + msg); } catch(e){ console.log('[LLM] ' + msg); } }
+
+    function normalizeResp(resp) {
+      try {
+        if (!resp) return resp;
+        if (typeof resp === 'string') {
+          try { return JSON.parse(resp); } catch(e) { return resp; }
+        }
+        if (typeof resp === 'object' && resp.message && typeof resp.message === 'string') {
+          try { return JSON.parse(resp.message); } catch(e) { return resp.message || resp; }
+        }
+        return resp;
+      } catch (e) { return resp; }
+    }
+
+    function sendToLLM(payload, { timeout = 15000 } = {}) {
+      return new Promise((resolve, reject) => {
+        const id = 'llm-' + Date.now() + '-' + Math.floor(Math.random()*100000);
+        payload._internal_id = id;
+        payload.response = true;
+
+        let settled = false;
+        const cleanup = () => { settled = true; clearTimeout(tt); };
+
+        function tryPlatformPost() {
+          try {
+            if (typeof PluginMessageHandler !== 'undefined' && PluginMessageHandler.postMessage) {
+              try {
+                PluginMessageHandler.postMessage(JSON.stringify(payload), function(platformResp){
+                  if (settled) return;
+                  cleanup();
+                  logLLM('postMessage callback raw: ' + (platformResp && typeof platformResp === 'string' ? platformResp.slice(0,200) : JSON.stringify(platformResp).slice(0,200)));
+                  resolve(normalizeResp(platformResp));
+                });
+                return true;
+              } catch (e) {
+                try {
+                  PluginMessageHandler.postMessage(JSON.stringify(payload));
+                  return true;
+                } catch (e2) { return false; }
+              }
+            }
+          } catch(e){}
+          return false;
+        }
+
+        const prev = window.onPluginMessage;
+        window.onPluginMessage = function(msg) {
+          try {
+            const parsed = (typeof msg === 'string') ? JSON.parse(msg) : msg;
+            if (parsed && parsed._internal_id && parsed._internal_id === id) {
+              if (settled) return;
+              cleanup();
+              window.onPluginMessage = prev;
+              logLLM('window.onPluginMessage matched id, raw: ' + (typeof msg === 'string' ? msg.slice(0,200) : JSON.stringify(msg).slice(0,200)));
+              resolve(normalizeResp(parsed));
+              return;
+            }
+          } catch(e){}
+          try { if (prev) prev(msg); } catch(e){}
+        };
+
+        const usedPlatform = tryPlatformPost();
+
+        const tt = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { window.onPluginMessage = prev; } catch(e){}
+          logLLM('LLM request timed out after ' + timeout + 'ms');
+          reject(new Error('LLM request timed out'));
+        }, timeout);
+
+        if (!usedPlatform && (typeof PluginMessageHandler === 'undefined' || !PluginMessageHandler.postMessage)) {
+          logLLM('PluginMessageHandler unavailable; using development fallback mock');
+          setTimeout(() => {
+            if (settled) return;
+            cleanup();
+            const mock = { name: 'pikachu', type: 'electric', description: 'Mocked creature for dev' };
+            resolve(mock);
+          }, 500);
+          return;
+        }
+      });
+    }
+
+    // ---------- Pokedex index (name -> url) ----------
+    let pokedexIndex = null;
+    async function ensurePokedexIndex() {
+      if (pokedexIndex) return pokedexIndex;
+      try {
+        const res = await fetch('https://pokemondb.net/pokedex/national');
+        if (!res.ok) throw new Error('Failed to fetch pokedex');
+        const text = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const anchors = doc.querySelectorAll('a[href*="/pokedex/"]');
+        const map = {};
+        anchors.forEach(a => {
+          const name = a.textContent && a.textContent.trim().toLowerCase();
+          const href = a.getAttribute('href');
+          if (name && href && !href.includes('#')) {
+            const full = href.startsWith('http') ? href : new URL(href, 'https://pokemondb.net').href;
+            if (!map[name]) map[name] = full;
+          }
+        });
+        pokedexIndex = map;
+        log('Pokedex index cached');
+        return pokedexIndex;
+      } catch (e) {
+        log('Pokedex fetch error: ' + (e && e.message ? e.message : e));
+        return {};
+      }
+    }
+    async function findPokedexUrlByName(name) {
+      if (!name) return null;
+      const index = await ensurePokedexIndex();
+      return index[name.toLowerCase()] || null;
+    }
+
+    // ---------- Name normalization ----------
+    function normalizeLLMName(resp) {
+      if (!resp) return null;
+      if (typeof resp === 'object') {
+        if (resp.name && typeof resp.name === 'string') return resp.name.trim();
+        if (resp.message && typeof resp.message === 'string') {
+          try {
+            const inner = JSON.parse(resp.message);
+            if (inner && inner.name) return inner.name.trim();
+          } catch (e){}
+          return resp.message.trim();
+        }
+      }
+      if (typeof resp === 'string') {
+        let s = resp.trim();
+        s = s.replace(/^the\s+pokemon\s+is\s+/i, '');
+        s = s.replace(/[^A-Za-z0-9\s-']/g, '');
+        s = s.split('\n')[0].trim();
+        return s || null;
+      }
+      return null;
+    }
+
+    // ---------- Scan flow bound to PTT ----------
+    async function pttScanHandler() {
+      try {
+        log('PTT pressed: capturing image');
+        const imageBase64 = await captureImageBase64();
+        const prompt = 'what is this pokemon in a name only reply';
+        log('Sending to LLM: "' + prompt + '"');
+        let llmResp;
+        try {
+          llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout: 20000 });
+        } catch (e) {
+          log('LLM send failed: ' + (e && e.message ? e.message : e));
+          return;
+        }
+        logLLM('raw: ' + (typeof llmResp === 'string' ? llmResp.slice(0,200) : JSON.stringify(llmResp).slice(0,200)));
+        const detectedName = normalizeLLMName(llmResp);
+        if (!detectedName) { log('LLM did not produce a usable name'); return; }
+        log('Detected: ' + detectedName);
+        const url = await findPokedexUrlByName(detectedName);
+        if (url) log('Found pokedex url');
+        else log('No pokedex url for: ' + detectedName);
+        const entry = { name: detectedName, type: '', description: '', pokedexUrl: url || '', capturedAt: new Date().toISOString() };
+        saveEntry(entry);
+        updateGallery();
+        switchView('rabbitdex');
+        showDetail((storageGet('rabbitdex') || []).length - 1);
+      } catch (e) {
+        log('PTT scan error: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // Bind hardware PTT (sideClick)
+    window.addEventListener('sideClick', () => {
+      if (window._pttBusy) return;
+      window._pttBusy = true;
+      pttScanHandler().finally(() => setTimeout(() => { window._pttBusy = false; }, 700));
+    });
+
+    // ---------- Save, gallery, UI ----------
+    function saveEntry(entry) {
+      const entries = storageGet('rabbitdex', []);
+      entries.push(entry);
+      storageSet('rabbitdex', entries);
+      updateDebug();
+    }
+
+    function updateGallery() {
+      const list = document.getElementById('rabbitdex-list');
+      list.innerHTML = '';
+      const entries = storageGet('rabbitdex', []);
+      entries.forEach((entry, i) => {
+        const li = document.createElement('li');
+        const img = document.createElement('img');
+        img.src = entry.pokedexUrl ? 'https://via.placeholder.com/96?text=?' : 'https://via.placeholder.com/96?text=?';
+        img.alt = entry.name;
+        const label = document.createElement('div');
+        label.style.flex = '1';
+        label.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:11px">${entry.type || ''}</div>`;
+        li.appendChild(img);
+        li.appendChild(label);
+        li.onclick = () => {
+          showDetail(i);
+          if (entry.pokedexUrl) window.open(entry.pokedexUrl, '_blank');
+          else log('No external page saved for this entry');
+        };
+        list.appendChild(li);
+      });
+      updateDebug();
+    }
+
+    function showDetail(index) {
+      const entries = storageGet('rabbitdex', []);
+      if (!entries || !entries[index]) return;
+      currentIndex = index;
+      const entry = entries[index];
+      const detail = document.getElementById('detail');
+      detail.innerHTML = `
+        <div style="font-weight:bold">${entry.name}</div>
+        <div style="font-size:12px">${entry.type || ''}</div>
+        <div style="font-size:12px; margin-top:6px">${entry.description || 'No description'}</div>
+        <div style="margin-top:6px"><a class="collection-link" href="${entry.pokedexUrl || '#'}" target="_blank">${entry.pokedexUrl ? 'Open pokedex page' : 'No saved page'}</a></div>
+      `;
+      updateDebug();
+    }
+
+    // ---------- View switching ----------
+    function switchView(view) {
+      views.forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.classList.add('hidden');
+        const control = document.getElementById(v + '-controls');
+        if (control) control.style.display = 'none';
+      });
+      const showEl = document.getElementById(view);
+      if (showEl) showEl.classList.remove('hidden');
+      const showCtrl = document.getElementById(view + '-controls');
+      if (showCtrl) showCtrl.style.display = 'grid';
+      currentView = view;
+      updateDebug();
+    }
+
+    // ---------- Button events ----------
+    document.getElementById('start-camera').addEventListener('click', startCamera);
+    document.getElementById('stop-camera').addEventListener('click', stopCamera);
+    document.getElementById('scan').addEventListener('click', async () => { await pttScanHandler(); });
+    document.getElementById('go-to-camera').addEventListener('click', () => switchView('camera'));
+    document.getElementById('go-to-rabbitdex').addEventListener('click', () => { switchView('rabbitdex'); updateGallery(); });
+    document.getElementById('exit-camera').addEventListener('click', () => switchView('home'));
+    document.getElementById('exit-rabbitdex').addEventListener('click', () => switchView('home'));
+    document.getElementById('narrate').addEventListener('click', async () => {
+      const entries = storageGet('rabbitdex', []);
+      if (!entries || !entries[currentIndex]) return log('No entry to narrate');
+      const e = entries[currentIndex];
+      try {
+        await sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${e.name}, the ${e.type} creature. ${e.description}` }, { timeout: 15000 });
+        log('Narration request sent to LLM');
+      } catch (err) { log('Narration failed: ' + (err && err.message ? err.message : err)); }
+    });
+
+    // ---------- Hardware events fallback ----------
+    window.addEventListener('scrollUp', () => {
+      if (currentView === 'rabbitdex') {
+        const entries = storageGet('rabbitdex', []);
+        if (currentIndex > 0) showDetail(--currentIndex);
+      }
+    });
+    window.addEventListener('scrollDown', () => {
+      if (currentView === 'rabbitdex') {
+        const entries = storageGet('rabbitdex', []);
+        if (currentIndex < entries.length - 1) showDetail(++currentIndex);
+      }
+    });
+    window.addEventListener('longPressStart', () => {
+      if (currentView === 'rabbitdex') {
+        const entries = storageGet('rabbitdex', []);
+        if (!entries || !entries[currentIndex]) return;
+        const entry = entries[currentIndex];
+        sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}` }, { timeout: 15000 }).catch(()=>log('Narration failed'));
+      }
+    });
+
+    // ---------- Touch handling ----------
+    window.addEventListener('touchstart', (e) => {
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      const scanBtn = document.getElementById('scan');
+      const narrateBtn = document.getElementById('narrate');
+      if (currentView === 'camera' && scanBtn && scanBtn.contains(t.target)) { pttScanHandler(); }
+      if (currentView === 'rabbitdex' && narrateBtn && narrateBtn.contains(t.target)) {
+        const entries = storageGet('rabbitdex', []);
+        if (entries && entries[currentIndex]) {
+          const entry = entries[currentIndex];
+          sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}, the ${entry.type} creature. ${entry.description}` }, { timeout: 15000 }).catch(()=>log('Narration failed'));
+        }
+      }
+    }, { passive: true });
+
+    // ---------- Init ----------
+    document.getElementById('home-controls').style.display = 'grid';
+    switchView('home');
+    updateDebug();
+  </script>
+</body>
+</html>
