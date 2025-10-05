@@ -2,25 +2,28 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>RabbitDex PTT</title>
+  <title>RabbitDex PTT + Terminal</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { margin:0; padding:0; background:#FF0000; font-family:'Courier New',monospace; color:#000; height:100vh; overflow:hidden; display:flex; flex-direction:column; align-items:center; }
-    #top-hinge { background:#666; height:10px; width:220px; margin-top:10px; border-radius:3px; }
-    #screen { background:#000; border:2px solid #FFF; width:220px; height:180px; margin:12px 0; position:relative; overflow-y:auto; border-radius:5px; color:#fff; padding:6px; box-sizing:border-box; }
-    #menu-area { position:absolute; top:calc(10px + 180px + 30px); left:50%; transform:translateX(-50%); width:220px; padding:5px 0; text-align:center; }
-    .button { background:#DDD; border:1px solid #000; padding:5px; margin:2px; display:inline-block; cursor:pointer; width:105px; height:30px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box; font-family:inherit; }
-    .exit-btn { background:#AAA; padding:3px; }
-    .hidden { display:none; }
-    #camera-controls, #rabbitdex-controls, #home-controls { display:none; grid-template-columns:1fr 1fr; gap:5px; width:220px; margin:0 auto; }
-    video { width:100%; height:auto; background:#222; border-radius:3px; }
-    #camera-log { position:absolute; bottom:-36px; left:10px; width:200px; height:30px; overflow-y:auto; font-size:10px; color:#000; background:#fff; padding:2px; border-radius:3px; box-sizing:border-box; }
-    #rabbitdex-list { list-style:none; padding:0; margin:0; color:#000; }
-    #rabbitdex-list li { margin:5px 0; cursor:pointer; display:flex; align-items:center; gap:8px; background:#fff; color:#000; padding:4px; border-radius:4px; }
-    #rabbitdex-list img { width:48px; height:48px; object-fit:contain; }
-    #detail { padding:6px; color:#000; background:#fff; border-radius:4px; margin-top:6px; min-height:36px; font-size:12px; }
-    #debug-overlay { position:fixed; right:8px; top:8px; background:rgba(0,0,0,0.6); color:#fff; padding:6px; font-size:11px; border-radius:4px; max-width:260px; z-index:999; white-space:pre-line; }
-    a.collection-link { color:blue; text-decoration:underline; font-weight:bold; }
+    body{margin:0;padding:0;background:#FF0000;font-family:Courier,monospace;color:#000;height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center}
+    #top-hinge{background:#666;height:10px;width:220px;margin-top:10px;border-radius:3px}
+    #screen{background:#000;border:2px solid #FFF;width:220px;height:180px;margin:12px 0;position:relative;overflow-y:auto;border-radius:5px;color:#fff;padding:6px;box-sizing:border-box}
+    #menu-area{position:absolute;top:calc(10px + 180px + 30px);left:50%;transform:translateX(-50%);width:220px;padding:5px 0;text-align:center}
+    .button{background:#DDD;border:1px solid #000;padding:5px;margin:2px;display:inline-block;cursor:pointer;width:105px;height:30px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;font-family:inherit}
+    .exit-btn{background:#AAA;padding:3px}
+    .hidden{display:none}
+    #camera-controls,#rabbitdex-controls,#home-controls{display:none;grid-template-columns:1fr 1fr;gap:5px;width:220px;margin:0 auto}
+    video{width:100%;height:auto;background:#222;border-radius:3px}
+    #camera-log{position:absolute;bottom:-36px;left:10px;width:200px;height:30px;overflow-y:auto;font-size:10px;color:#000;background:#fff;padding:2px;border-radius:3px;box-sizing:border-box}
+    #rabbitdex-list{list-style:none;padding:0;margin:0;color:#000}
+    #rabbitdex-list li{margin:5px 0;cursor:pointer;display:flex;align-items:center;gap:8px;background:#fff;color:#000;padding:4px;border-radius:4px}
+    #rabbitdex-list img{width:48px;height:48px;object-fit:contain}
+    #detail{padding:6px;color:#000;background:#fff;border-radius:4px;margin-top:6px;min-height:36px;font-size:12px}
+    #debug-overlay{position:fixed;right:8px;top:8px;background:rgba(0,0,0,0.6);color:#fff;padding:6px;font-size:11px;border-radius:4px;max-width:260px;z-index:999;white-space:pre-line}
+    #terminal { width:220px; margin:6px auto 0; }
+    #terminal input { width:100%; box-sizing:border-box; padding:6px; font-family:inherit; }
+    #terminal .panel { background:#fff; padding:6px; border-radius:4px; color:#000; font-size:12px; }
+    #ptt-hold-sim{position:fixed;left:8px;bottom:8px;z-index:9999;padding:6px;background:#0f0;border:1px solid #000}
   </style>
 </head>
 <body>
@@ -38,7 +41,7 @@
     </section>
 
     <section id="home" class="hidden" aria-hidden="false">
-      <div style="color:#000; background:#fff; padding:6px; border-radius:4px;">RabbitDex Home</div>
+      <div style="color:#000;background:#fff;padding:6px;border-radius:4px;">RabbitDex Home</div>
     </section>
   </div>
 
@@ -61,20 +64,31 @@
     </div>
   </div>
 
+  <div id="terminal" class="panel hidden" aria-hidden="true">
+    <div style="font-weight:bold;margin-bottom:4px">LLM Terminal</div>
+    <input id="terminal-input" placeholder="Type a prompt or pokemon name" />
+    <div style="display:flex;gap:6px;margin-top:6px;">
+      <button id="terminal-send" class="button" style="flex:1">Send</button>
+      <button id="terminal-use" class="button" style="flex:1">Use as Name</button>
+    </div>
+    <div id="terminal-log" style="margin-top:6px;font-size:11px;color:#000;min-height:28px;"></div>
+  </div>
+
+  <button id="ptt-hold-sim">HOLD PTT (sim)</button>
   <div id="debug-overlay"></div>
 
 <script>
-/* Storage helpers */
+/* ---------- Storage helpers ---------- */
 const plainStorage = (function(){ try{ if (window.creationStorage && window.creationStorage.plain) return window.creationStorage.plain; }catch(e){} return localStorage; })();
 const secureStorage = (function(){ try{ if (window.creationStorage && window.creationStorage.secure) return window.creationStorage.secure; }catch(e){} return null; })();
 
-function storageGetPlain(key, fallback=null){ try { const v = plainStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
-function storageSetPlain(key,val){ try { plainStorage.setItem(key, JSON.stringify(val)); return true; } catch(e) { return false; } }
-async function storageSetSecureFile(key, base64Data){ try { if (secureStorage && secureStorage.setItem) { secureStorage.setItem(key, base64Data); return true; } plainStorage.setItem(key, base64Data); return true; } catch(e){ return false; } }
-async function storageGetSecureFile(key){ try { if (secureStorage && secureStorage.getItem) return secureStorage.getItem(key); return plainStorage.getItem(key); } catch(e){ return null; } }
-async function storageRemoveFile(key){ try { if (secureStorage && secureStorage.removeItem) { secureStorage.removeItem(key); return true; } plainStorage.removeItem(key); return true; } catch(e){ return false; } }
+function storageGetPlain(key, fallback=null){ try{ const v = plainStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+function storageSetPlain(key,val){ try{ plainStorage.setItem(key, JSON.stringify(val)); return true; }catch(e){ return false; } }
+async function storageSetSecureFile(key, base64Data){ try{ if (secureStorage && secureStorage.setItem){ secureStorage.setItem(key, base64Data); return true; } plainStorage.setItem(key, base64Data); return true; }catch(e){ return false; } }
+async function storageGetSecureFile(key){ try{ if (secureStorage && secureStorage.getItem) return secureStorage.getItem(key); return plainStorage.getItem(key); }catch(e){ return null; } }
+async function storageRemoveFile(key){ try{ if (secureStorage && secureStorage.removeItem){ secureStorage.removeItem(key); return true; } plainStorage.removeItem(key); return true; }catch(e){ return false; } }
 
-/* Globals & DOM */
+/* ---------- Globals & DOM ---------- */
 let cameraStream = null;
 let currentView = 'home';
 let currentIndex = 0;
@@ -82,73 +96,330 @@ const views = ['home','camera','rabbitdex'];
 const videoEl = document.getElementById('camera-preview');
 const logDiv = document.getElementById('camera-log');
 const debug = document.getElementById('debug-overlay');
+const terminalPanel = document.getElementById('terminal');
+const terminalInput = document.getElementById('terminal-input');
+const terminalLog = document.getElementById('terminal-log');
 
 function log(msg){ const time = new Date().toISOString().split('T')[1].slice(0,8); logDiv.textContent += `[${time}] ${msg}\n`; logDiv.scrollTop = logDiv.scrollHeight; updateDebug(); }
-function updateDebug(){ const entries = storageGetPlain('rabbitdex') || []; debug.innerText = `View: ${currentView}\nSaved: ${entries.length}\nIndex: ${currentIndex}\nPluginAvailable: ${typeof PluginMessageHandler !== 'undefined' ? 'yes' : 'no'}\nSecureStorage: ${secureStorage ? 'yes' : 'no'}`; debug.style.display='block'; }
+function updateDebug(){ const entries = storageGetPlain('rabbitdex') || []; debug.innerText = `View: ${currentView}\nSaved: ${entries.length}\nIndex: ${currentIndex}\nPluginAvailable: ${typeof PluginMessageHandler !== 'undefined' ? 'yes' : 'no'}\nSecureStorage: ${secureStorage ? 'yes' : 'no'}`; debug.style.display = 'block'; }
 
-/* Camera */
-async function startCamera(){ try { cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); videoEl.srcObject = cameraStream; await videoEl.play().catch(()=>{}); log('Camera preview started'); } catch(e){ log('Camera error: ' + (e && e.message ? e.message : e)); } }
-function stopCamera(){ if (cameraStream) { cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; videoEl.srcObject = null; log('Camera stopped'); } }
-async function ensureCameraReady(retries=6, delayMs=300){ if (!cameraStream){ log('Camera not started; starting camera automatically'); await startCamera(); } for (let i=0;i<retries;i++){ if (videoEl && videoEl.readyState >= 2){ log('Camera ready (readyState='+videoEl.readyState+')'); return true; } log('Waiting for camera ready... attempt '+(i+1)); await new Promise(r=>setTimeout(r,delayMs)); } log('Camera failed to become ready after retries (readyState=' + (videoEl?videoEl.readyState:'no-video') + ')'); return false; }
-async function captureImageBase64(){ const ok = await ensureCameraReady(); if (!ok) throw new Error('Camera not ready'); try { const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 282; const ctx = canvas.getContext('2d'); ctx.drawImage(videoEl,0,0,canvas.width,canvas.height); const dataUrl = canvas.toDataURL('image/jpeg',0.9); log('Image captured locally (size: ' + dataUrl.length + ' chars)'); return dataUrl.split(',')[1]; } catch(e){ log('captureImage error: ' + (e && e.message ? e.message : e)); throw e; } }
+/* ---------- Camera ---------- */
+async function startCamera(){ try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } }); videoEl.srcObject = cameraStream; await videoEl.play().catch(()=>{}); log('Camera preview started'); }catch(e){ log('Camera error: ' + (e && e.message ? e.message : e)); } }
+function stopCamera(){ if (cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; videoEl.srcObject = null; log('Camera stopped'); } }
+async function ensureCameraReady(retries=6, delayMs=300){ if (!cameraStream){ log('Camera not started; starting camera automatically'); await startCamera(); } for (let i=0;i<retries;i++){ if (videoEl && videoEl.readyState >= 2){ log('Camera ready (readyState=' + videoEl.readyState + ')'); return true; } log('Waiting for camera ready... attempt ' + (i+1)); await new Promise(r=>setTimeout(r, delayMs)); } log('Camera failed to become ready after retries (readyState=' + (videoEl?videoEl.readyState:'no-video') + ')'); return false; }
+async function captureImageBase64(){ const ok = await ensureCameraReady(); if (!ok) throw new Error('Camera not ready'); try{ const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 282; const ctx = canvas.getContext('2d'); ctx.drawImage(videoEl,0,0,canvas.width,canvas.height); const dataUrl = canvas.toDataURL('image/jpeg',0.85); log('Image captured locally (size: ' + dataUrl.length + ' chars)'); return dataUrl.split(',')[1]; }catch(e){ log('captureImage error: ' + (e && e.message ? e.message : e)); throw e; } }
 
-/* Robust LLM messaging */
+/* ---------- Robust LLM messaging (with shrinking & retries) ---------- */
 function logLLM(msg){ try{ log('[LLM] ' + msg); }catch(e){ console.log('[LLM] ' + msg); } }
-function normalizeResp(resp){ try { if (!resp) return resp; if (typeof resp === 'string'){ try { return JSON.parse(resp); } catch(e){ return resp; } } if (typeof resp === 'object' && resp.message && typeof resp.message === 'string'){ try { return JSON.parse(resp.message); } catch(e){ return resp.message || resp; } } return resp; } catch(e){ return resp; } }
-function sendToLLM(payload,{timeout=15000}={}){ return new Promise((resolve,reject)=>{ const id = 'llm-'+Date.now()+'-'+Math.floor(Math.random()*100000); payload._internal_id = id; payload.response = true; let settled=false; const cleanup=()=>{ settled=true; clearTimeout(tt); }; function tryPlatformPost(){ try { if (typeof PluginMessageHandler !== 'undefined' && PluginMessageHandler.postMessage){ try { PluginMessageHandler.postMessage(JSON.stringify(payload), function(platformResp){ if (settled) return; cleanup(); logLLM('postMessage callback raw: ' + (platformResp && typeof platformResp === 'string' ? platformResp.slice(0,200) : JSON.stringify(platformResp).slice(0,200))); resolve(normalizeResp(platformResp)); }); return true; } catch(e){ try { PluginMessageHandler.postMessage(JSON.stringify(payload)); return true; } catch(e2){ return false; } } } } catch(e){} return false; } const prev = window.onPluginMessage; window.onPluginMessage = function(msg){ try { const parsed = (typeof msg === 'string') ? JSON.parse(msg) : msg; if (parsed && parsed._internal_id && parsed._internal_id === id){ if (settled) return; cleanup(); window.onPluginMessage = prev; logLLM('window.onPluginMessage matched id, raw: ' + (typeof msg === 'string' ? msg.slice(0,200) : JSON.stringify(msg).slice(0,200))); resolve(normalizeResp(parsed)); return; } } catch(e){} try { if (prev) prev(msg); } catch(e){} }; const used = tryPlatformPost(); const tt = setTimeout(()=>{ if (settled) return; settled=true; try{ window.onPluginMessage = prev; }catch(e){} logLLM('LLM request timed out after ' + timeout + 'ms'); reject(new Error('LLM request timed out')); }, timeout); if (!used && (typeof PluginMessageHandler === 'undefined' || !PluginMessageHandler.postMessage)){ logLLM('PluginMessageHandler unavailable; using development fallback mock'); setTimeout(()=>{ if (settled) return; cleanup(); const mock = { name: 'pikachu', type: 'electric', description: 'Mocked creature for dev' }; resolve(mock); }, 500); return; } }); }
 
-/* Pokedex index */
-let pokedexIndex = null;
-async function ensurePokedexIndex(){ if (pokedexIndex) return pokedexIndex; try { const res = await fetch('https://pokemondb.net/pokedex/national'); if (!res.ok) throw new Error('Failed to fetch pokedex'); const text = await res.text(); const parser = new DOMParser(); const doc = parser.parseFromString(text,'text/html'); const anchors = doc.querySelectorAll('a[href*=\"/pokedex/\"]'); const map = {}; anchors.forEach(a=>{ const name = a.textContent && a.textContent.trim().toLowerCase(); const href = a.getAttribute('href'); if (name && href && !href.includes('#')){ const full = href.startsWith('http') ? href : new URL(href,'https://pokemondb.net').href; if (!map[name]) map[name] = full; } }); pokedexIndex = map; log('Pokedex index cached'); return pokedexIndex; } catch(e){ log('Pokedex fetch error: ' + (e && e.message ? e.message : e)); return {}; } }
-async function findPokedexUrlByName(name){ if (!name) return null; const index = await ensurePokedexIndex(); return index[name.toLowerCase()] || null; }
+(function(){
+  const _prevOnPluginMessage = window.onPluginMessage;
+  window.onPluginMessage = function(raw){
+    try{ const dump = typeof raw === 'string' ? raw.slice(0,800) : JSON.stringify(raw).slice(0,800); logLLM('Platform onPluginMessage raw: ' + dump); }catch(e){}
+    try{ if (_prevOnPluginMessage) _prevOnPluginMessage(raw); }catch(e){}
+  };
 
-/* Name normalization */
-function normalizeLLMName(resp){ if (!resp) return null; if (typeof resp === 'object'){ if (resp.name && typeof resp.name === 'string') return resp.name.trim(); if (resp.message && typeof resp.message === 'string'){ try { const inner = JSON.parse(resp.message); if (inner && inner.name) return inner.name.trim(); } catch(e){} return resp.message.trim(); } } if (typeof resp === 'string'){ let s = resp.trim(); s = s.replace(/^the\s+pokemon\s+is\s+/i,''); s = s.replace(/[^A-Za-z0-9\s-']/g,''); s = s.split('\\n')[0].trim(); return s || null; } return null; }
+  function normalizeResp(resp){
+    try{
+      if (!resp) return resp;
+      if (typeof resp === 'string'){ try{ return JSON.parse(resp); }catch(e){ return resp; } }
+      if (typeof resp === 'object'){
+        if (resp.message && typeof resp.message === 'string'){ try{ return JSON.parse(resp.message); }catch(e){ return resp.message; } }
+        if (resp.payload) return resp.payload;
+        return resp;
+      }
+      return resp;
+    }catch(e){ return resp; }
+  }
 
-/* Save image + entry */
-async function saveCapturedImageAndEntry(name, base64Data, pokedexUrl){ const ts = Date.now(); const safeName = (name||'creature').toLowerCase().replace(/\\s+/g,'_').replace(/[^a-z0-9_'-]/g,'').slice(0,64) || 'creature'; const fileKey = `rabbitdex_img_${safeName}_${ts}`; const saved = await storageSetSecureFile(fileKey, base64Data); if (!saved) log('Warning: failed to store image in secure storage, falling back'); const entry = { name: name, pokedexUrl: pokedexUrl || '', imageKey: fileKey, capturedAt: new Date().toISOString() }; const entries = storageGetPlain('rabbitdex') || []; entries.push(entry); storageSetPlain('rabbitdex', entries); log('Saved entry: ' + name + ' (imageKey: ' + fileKey + ')'); updateDebug(); return entry; }
+  function shrinkImageBase64(fullDataUrl, maxWidth = 640, quality = 0.6){
+    try{
+      if (!fullDataUrl || !fullDataUrl.startsWith('data:')) return fullDataUrl;
+      const img = new Image();
+      img.src = fullDataUrl;
+      return new Promise((resolve)=>{
+        img.onload = function(){
+          const ratio = Math.min(1, maxWidth / img.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          const reduced = canvas.toDataURL('image/jpeg', quality);
+          resolve(reduced.split(',')[1]);
+        };
+        img.onerror = function(){ resolve(fullDataUrl.split(',')[1]); };
+      });
+    }catch(e){ return Promise.resolve(fullDataUrl.split(',')[1]); }
+  }
 
-/* Core PTT scan flow */
-async function doScanAndProcess(){ try { if (!cameraStream) { await startCamera(); await new Promise(r=>setTimeout(r,200)); } const imageBase64 = await captureImageBase64(); log('Capture succeeded; sending to LLM'); const prompt = 'what is this pokemon in a name only reply'; let llmResp; try { llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout: 20000 }); } catch(e){ log('LLM send failed: ' + (e && e.message ? e.message : e)); return; } logLLM('raw: ' + (typeof llmResp === 'string' ? llmResp.slice(0,200) : JSON.stringify(llmResp).slice(0,200))); const detectedName = normalizeLLMName(llmResp); if (!detectedName) { log('LLM did not produce a usable name'); return; } log('Detected: ' + detectedName); const url = await findPokedexUrlByName(detectedName); if (url) log('Found pokedex url'); else log('No pokedex url for: ' + detectedName); const entry = await saveCapturedImageAndEntry(detectedName, imageBase64, url); updateGallery(); switchView('rabbitdex'); const idx = (storageGetPlain('rabbitdex') || []).length - 1; showDetail(idx); } catch(e){ log('doScanAndProcess error: ' + (e && e.message ? e.message : e)); } }
+  window.sendToLLM = async function(payload, options = {}){
+    const maxAttempts = options.retries || 3;
+    const baseTimeout = options.timeout || 30000;
+    const backoffFactor = options.backoffFactor || 1.8;
 
-/* Bind PTT - specifically handle sideClick (confirmed) and sideclick on document/window */
-(function bindPTTConfirmed(){
-  function rawLog(name, ev){ try { const short = {type: ev && ev.type, detail: ev && ev.detail, time: Math.round(ev.timeStamp||0)}; log('[PTT-RAW] ' + name + ' ' + JSON.stringify(short)); } catch(e){ log('[PTT-RAW] ' + name); } }
-  async function handler(source){ rawLog('handler-trigger', {type: source}); log('[PTT] triggered from ' + source); if (window._pttBusy) { log('[PTT] busy, ignoring'); return; } window._pttBusy = true; try { await doScanAndProcess(); } catch(e){ log('[PTT] handler error: ' + (e && e.message ? e.message : e)); } finally { setTimeout(()=>{ window._pttBusy = false; },700); } }
-  // Attach confirmed events
-  try { window.addEventListener('sideClick', ev => { rawLog('window.sideClick', ev); handler('window:sideClick'); }, true); } catch(e) {}
-  try { document.addEventListener('sideClick', ev => { rawLog('document.sideClick', ev); handler('document:sideClick'); }, true); } catch(e) {}
-  try { window.addEventListener('sideclick', ev => { rawLog('window.sideclick', ev); handler('window:sideclick'); }, true); } catch(e) {}
-  try { document.addEventListener('sideclick', ev => { rawLog('document.sideclick', ev); handler('document:sideclick'); }, true); } catch(e) {}
-  // keyboard fallback for testing
-  window.addEventListener('keydown', ev => { if (ev.code === 'Space' || ev.code === 'KeyP') { log('[PTT] keyboard fallback ' + ev.code); handler('keyboard'); ev.preventDefault(); }});
-  log('PTT listeners installed for sideClick/sideclick and keyboard fallback');
+    if (payload.imageBase64){
+      // convert to data URL if needed for shrinking
+      const maybeDataUrl = payload.imageBase64.indexOf(',') === -1 ? ('data:image/jpeg;base64,' + payload.imageBase64) : payload.imageBase64;
+      payload.imageBase64 = await shrinkImageBase64(maybeDataUrl, 640, 0.6);
+      logLLM('Shrunk image before sending (approx ' + Math.round((payload.imageBase64.length/1024)) + ' KB)');
+    }
+
+    let lastErr = null;
+    for (let attempt = 1, timeout = baseTimeout; attempt <= maxAttempts; attempt++, timeout = Math.round(timeout * backoffFactor)){
+      logLLM(`[LLM-Retry] attempt ${attempt}/${maxAttempts} (timeout ${timeout}ms)`);
+      try{
+        const result = await new Promise((resolve,reject)=>{
+          let settled = false;
+          const id = 'llm-' + Date.now() + '-' + Math.floor(Math.random()*100000);
+          const payloadOut = Object.assign({}, payload, { _internal_id: id, response: true });
+          const tt = setTimeout(()=>{ if (settled) return; settled = true; reject(new Error('LLM request timed out')); }, timeout);
+
+          try{
+            if (typeof PluginMessageHandler !== 'undefined' && PluginMessageHandler.postMessage){
+              try{
+                PluginMessageHandler.postMessage(JSON.stringify(payloadOut), function(platformResp){
+                  if (settled) return;
+                  settled = true; clearTimeout(tt);
+                  resolve(platformResp);
+                });
+                return;
+              }catch(e){
+                try{ PluginMessageHandler.postMessage(JSON.stringify(payloadOut)); }catch(e2){ clearTimeout(tt); reject(e2||e); }
+              }
+            }else{ clearTimeout(tt); reject(new Error('PluginMessageHandler unavailable')); }
+          }catch(e){ clearTimeout(tt); reject(e); }
+        });
+
+        const normalized = normalizeResp(result);
+        logLLM(`[LLM-Retry] success on attempt ${attempt}`);
+        return normalized;
+      }catch(err){
+        lastErr = err;
+        logLLM(`[LLM-Retry] attempt ${attempt} failed: ${err && err.message ? err.message : err}`);
+        if (attempt === maxAttempts) break;
+        const backoffMs = Math.min(20000, Math.round((attempt * attempt) * 300));
+        logLLM(`[LLM-Retry] backing off ${backoffMs}ms`);
+        await new Promise(r=>setTimeout(r, backoffMs));
+      }
+    }
+
+    if (typeof PluginMessageHandler === 'undefined' || !PluginMessageHandler.postMessage){
+      logLLM('PluginMessageHandler unavailable; returning development mock');
+      return { name: 'pikachu' };
+    }
+
+    const readable = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+    logLLM('LLM final failure: ' + readable);
+    throw new Error('LLM final failure: ' + readable);
+  };
 })();
 
-/* Gallery / detail */
-function updateGallery(){ const list = document.getElementById('rabbitdex-list'); list.innerHTML = ''; const entries = storageGetPlain('rabbitdex') || []; entries.forEach((entry,i)=>{ const li = document.createElement('li'); const img = document.createElement('img'); storageGetSecureFile(entry.imageKey).then(base => { if (base) img.src = 'data:image/jpeg;base64,'+base; else img.src = 'https://via.placeholder.com/96?text=?'; }).catch(()=>{ img.src = 'https://via.placeholder.com/96?text=?'; }); img.alt = entry.name; const label = document.createElement('div'); label.style.flex='1'; label.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:11px">${entry.pokedexUrl ? 'Page saved' : ''}</div>`; li.appendChild(img); li.appendChild(label); li.onclick = ()=>{ showDetail(i); if (entry.pokedexUrl) window.open(entry.pokedexUrl, '_blank'); else log('No external page saved for this entry'); }; list.appendChild(li); }); updateDebug(); }
+/* ---------- Pokedex index ---------- */
+let pokedexIndex = null;
+async function ensurePokedexIndex(){
+  if (pokedexIndex) return pokedexIndex;
+  try{
+    const res = await fetch('https://pokemondb.net/pokedex/national');
+    if (!res.ok) throw new Error('Failed to fetch');
+    const text = await res.text();
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const anchors = doc.querySelectorAll('a[href*="/pokedex/"]');
+    const map = {};
+    anchors.forEach(a=>{
+      const name = a.textContent && a.textContent.trim().toLowerCase();
+      const href = a.getAttribute('href');
+      if (name && href && !href.includes('#')) {
+        const full = href.startsWith('http') ? href : new URL(href,'https://pokemondb.net').href;
+        if (!map[name]) map[name] = full;
+      }
+    });
+    pokedexIndex = map;
+    log('Pokedex index cached');
+    return pokedexIndex;
+  }catch(e){ log('Pokedex fetch error: ' + (e && e.message ? e.message : e)); return {}; }
+}
+async function findPokedexUrlByName(name){ if (!name) return null; const index = await ensurePokedexIndex(); return index[name.toLowerCase()] || null; }
 
-function showDetail(index){ const entries = storageGetPlain('rabbitdex') || []; if (!entries || !entries[index]) return; currentIndex = index; const entry = entries[index]; const detail = document.getElementById('detail'); detail.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:12px;margin-top:6px">${entry.pokedexUrl ? `<a class="collection-link" href="${entry.pokedexUrl}" target="_blank">Open pokedex page</a>` : 'No saved page'}</div><div id="detail-image" style="margin-top:6px"></div><div style="margin-top:6px"><button id="open-image" class="button">View Image</button> <button id="delete-image" class="button">Delete Image</button></div>`; document.getElementById('open-image').onclick = async ()=>{ const base = await storageGetSecureFile(entry.imageKey); if (base) { const w = window.open(); w.document.body.style.margin='0'; const img = w.document.createElement('img'); img.src = 'data:image/jpeg;base64,'+base; img.style.maxWidth='100%'; img.style.height='auto'; w.document.body.appendChild(img); } else { log('Image not found for key ' + entry.imageKey); } }; document.getElementById('delete-image').onclick = async ()=>{ const ok = confirm('Delete stored image for ' + entry.name + '?'); if (!ok) return; const removed = await storageRemoveFile(entry.imageKey); if (!removed) log('Failed to remove image file'); const arr = storageGetPlain('rabbitdex') || []; arr.splice(index,1); storageSetPlain('rabbitdex', arr); updateGallery(); detail.innerHTML = '<div>Deleted</div>'; updateDebug(); }; updateDebug(); }
+/* ---------- Name normalization ---------- */
+function normalizeLLMName(resp){
+  if (!resp) return null;
+  if (typeof resp === 'object'){
+    if (resp.name && typeof resp.name === 'string') return resp.name.trim();
+    if (resp.message && typeof resp.message === 'string'){
+      try{ const inner = JSON.parse(resp.message); if (inner && inner.name) return inner.name.trim(); }catch(e){}
+      return resp.message.trim();
+    }
+    if (resp.payload && resp.payload.name) return resp.payload.name;
+  }
+  if (typeof resp === 'string'){
+    let s = resp.trim();
+    s = s.replace(/^the\s+pokemon\s+is\s+/i,'');
+    s = s.replace(/[^A-Za-z0-9\s-']/g,'');
+    s = s.split('\n')[0].trim();
+    return s || null;
+  }
+  return null;
+}
 
-/* Views */
-function switchView(view){ views.forEach(v=>{ const el = document.getElementById(v); if (el) el.classList.add('hidden'); const control = document.getElementById(v+'-controls'); if (control) control.style.display='none'; }); const showEl = document.getElementById(view); if (showEl) showEl.classList.remove('hidden'); const showCtrl = document.getElementById(view+'-controls'); if (showCtrl) showCtrl.style.display='grid'; currentView = view; updateDebug(); }
+/* ---------- Save image + entry ---------- */
+async function saveCapturedImageAndEntry(name, base64Data, pokedexUrl){
+  const ts = Date.now();
+  const safeName = (name||'creature').toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_'-]/g,'').slice(0,64) || 'creature';
+  const fileKey = `rabbitdex_img_${safeName}_${ts}`;
+  const saved = await storageSetSecureFile(fileKey, base64Data);
+  if (!saved) log('Warning: failed to store image in secure storage, falling back to plain storage');
+  const entry = { name: name, pokedexUrl: pokedexUrl || '', imageKey: fileKey, capturedAt: new Date().toISOString() };
+  const arr = storageGetPlain('rabbitdex') || [];
+  arr.push(entry);
+  storageSetPlain('rabbitdex', arr);
+  log('Saved entry: ' + name + ' (imageKey: ' + fileKey + ')');
+  updateDebug();
+  return entry;
+}
 
-/* Buttons */
+/* ---------- Core flow used by release-on-PTT ---------- */
+async function doScanAndProcess(){ try{
+  if (!cameraStream){ await startCamera(); await new Promise(r=>setTimeout(r,200)); }
+  const imageBase64 = await captureImageBase64();
+  log('Capture succeeded; sending to LLM');
+  const prompt = 'what is this pokemon in a name only reply';
+  let llmResp;
+  try{ llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout:45000, retries:2, backoffFactor:1.6 }); }
+  catch(e){ log('LLM send failed: ' + (e && e.message ? e.message : e)); return; }
+  logLLM('raw: ' + (typeof llmResp === 'string' ? llmResp.slice(0,200) : JSON.stringify(llmResp).slice(0,200)));
+  const detectedName = normalizeLLMName(llmResp);
+  if (!detectedName) { log('LLM did not produce a usable name'); return; }
+  log('Detected: ' + detectedName);
+  const url = await findPokedexUrlByName(detectedName);
+  if (url) log('Found pokedex url'); else log('No pokedex url for: ' + detectedName);
+  const entry = await saveCapturedImageAndEntry(detectedName, imageBase64, url);
+  updateGallery();
+  switchView('rabbitdex');
+  const idx = (storageGetPlain('rabbitdex') || []).length - 1;
+  showDetail(idx);
+}catch(e){ log('doScanAndProcess error: ' + (e && e.message ? e.message : e)); }}
+
+/* ---------- Hold-to-capture PTT binding ---------- */
+(function bindPTTHoldFlow(){
+  let isPressed = false;
+  let pressStartTime = 0;
+  const startNames = ['sideClickDown','sideclickdown','sideDown','pttdown','sidePressStart','pressStart','buttonDown','sidebuttondown'];
+  const endNames = ['sideClickUp','sideclickup','sideUp','pttup','sidePressEnd','pressEnd','buttonUp','sidebuttonup'];
+
+  function debugRaw(name, ev){ try{ const short = {type:ev&&ev.type, detail:ev&&ev.detail, time:Math.round(ev.timeStamp||0)}; log(`[PTT-HOLD-RAW] ${name} ${JSON.stringify(short)}`); }catch(e){ log(`[PTT-HOLD-RAW] ${name}`); } }
+
+  async function onPressStart(source){
+    if (isPressed) return;
+    isPressed = true; pressStartTime = Date.now();
+    log(`[PTT] press start from ${source}`);
+    try{ await startCamera(); }catch(e){ log('[PTT] startCamera error: ' + (e && e.message ? e.message : e)); }
+    log('PTT hold: release to capture');
+  }
+
+  async function onPressEnd(source){
+    if (!isPressed){ log(`[PTT] release event ${source} received with no prior press recorded — attempting capture`); }
+    isPressed = false;
+    const holdMs = Date.now() - pressStartTime;
+    log(`[PTT] press end from ${source} (held ${holdMs}ms) — capturing`);
+    try{
+      const imageBase64 = await captureImageBase64();
+      log('Capture succeeded; sending to LLM');
+      const prompt = 'what is this pokemon in a name only reply';
+      let llmResp;
+      try{ llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout:45000, retries:2, backoffFactor:1.6 }); }
+      catch(e){ log('LLM send failed: ' + (e && e.message ? e.message : e)); return; }
+      logLLM('raw: ' + (typeof llmResp === 'string' ? llmResp.slice(0,200) : JSON.stringify(llmResp).slice(0,200)));
+      const detectedName = normalizeLLMName(llmResp);
+      if (!detectedName) { log('LLM did not produce a usable name'); return; }
+      log('Detected: ' + detectedName);
+      const url = await findPokedexUrlByName(detectedName);
+      if (url) log('Found pokedex url'); else log('No pokedex url for: ' + detectedName);
+      const entry = await saveCapturedImageAndEntry(detectedName, imageBase64, url);
+      updateGallery();
+      switchView('rabbitdex');
+      showDetail((storageGetPlain('rabbitdex') || []).length - 1);
+    }catch(err){ log('[PTT] capture/send error: ' + (err && err.message ? err.message : err)); }
+  }
+
+  startNames.forEach(n=>{ try{ window.addEventListener(n, ev=>{ debugRaw('window.'+n, ev); onPressStart('window.'+n); }, true); document.addEventListener(n, ev=>{ debugRaw('document.'+n, ev); onPressStart('document.'+n); }, true); }catch(e){} });
+  endNames.forEach(n=>{ try{ window.addEventListener(n, ev=>{ debugRaw('window.'+n, ev); onPressEnd('window.'+n); }, true); document.addEventListener(n, ev=>{ debugRaw('document.'+n, ev); onPressEnd('document.'+n); }, true); }catch(e){} });
+
+  // Confirmed single-shot sideClick on release
+  try{ window.addEventListener('sideClick', ev=>{ debugRaw('window.sideClick', ev); onPressEnd('window.sideClick'); }, true); }catch(e){}
+  try{ document.addEventListener('sideClick', ev=>{ debugRaw('document.sideClick', ev); onPressEnd('document.sideClick'); }, true); }catch(e){}
+
+  // Keyboard fallback: press/release
+  let kbHolding = false;
+  window.addEventListener('keydown', ev=>{ if (ev.code === 'Space' || ev.code === 'KeyP'){ if (!kbHolding){ kbHolding = true; onPressStart('keyboard'); } ev.preventDefault(); }});
+  window.addEventListener('keyup', ev=>{ if (ev.code === 'Space' || ev.code === 'KeyP'){ if (kbHolding){ kbHolding = false; onPressEnd('keyboard'); } ev.preventDefault(); }});
+
+  // Visible pointer simulator (press & hold)
+  const pointerBtn = document.getElementById('ptt-hold-sim');
+  pointerBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); debugRaw('ptt-hold-sim.pointerdown', e); onPressStart('ptt-hold-sim'); }, {passive:false});
+  pointerBtn.addEventListener('pointerup', e=>{ debugRaw('ptt-hold-sim.pointerup', e); onPressEnd('ptt-hold-sim'); }, {passive:true});
+  pointerBtn.addEventListener('pointercancel', e=>{ debugRaw('ptt-hold-sim.pointercancel', e); }, {passive:true});
+
+  log('PTT hold-to-capture listeners installed.');
+})();
+
+/* ---------- Gallery / detail ---------- */
+function updateGallery(){ const list = document.getElementById('rabbitdex-list'); list.innerHTML = ''; const entries = storageGetPlain('rabbitdex') || []; entries.forEach((entry,i)=>{ const li = document.createElement('li'); const img = document.createElement('img'); storageGetSecureFile(entry.imageKey).then(base=>{ if (base) img.src = 'data:image/jpeg;base64,'+base; else img.src = 'https://via.placeholder.com/96?text=?'; }).catch(()=>{ img.src = 'https://via.placeholder.com/96?text=?'; }); img.alt = entry.name; const label = document.createElement('div'); label.style.flex='1'; label.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:11px">${entry.pokedexUrl ? 'Page saved' : ''}</div>`; li.appendChild(img); li.appendChild(label); li.onclick = ()=>{ showDetail(i); if (entry.pokedexUrl) window.open(entry.pokedexUrl, '_blank'); else log('No external page saved for this entry'); }; list.appendChild(li); }); updateDebug(); }
+
+function showDetail(index){ const entries = storageGetPlain('rabbitdex') || []; if (!entries || !entries[index]) return; currentIndex = index; const entry = entries[index]; const detail = document.getElementById('detail'); detail.innerHTML = `<div style="font-weight:bold">${entry.name}</div><div style="font-size:12px;margin-top:6px">${entry.pokedexUrl ? `<a class="collection-link" href="${entry.pokedexUrl}" target="_blank">Open pokedex page</a>` : 'No saved page'}</div><div id="detail-image" style="margin-top:6px"></div><div style="margin-top:6px"><button id="open-image" class="button">View Image</button> <button id="delete-image" class="button">Delete Image</button></div>`; document.getElementById('open-image').onclick = async ()=>{ const base = await storageGetSecureFile(entry.imageKey); if (base){ const w = window.open(); w.document.body.style.margin='0'; const img = w.document.createElement('img'); img.src = 'data:image/jpeg;base64,'+base; img.style.maxWidth='100%'; img.style.height='auto'; w.document.body.appendChild(img); } else log('Image not found for key ' + entry.imageKey); }; document.getElementById('delete-image').onclick = async ()=>{ const ok = confirm('Delete stored image for ' + entry.name + '?'); if (!ok) return; const removed = await storageRemoveFile(entry.imageKey); if (!removed) log('Failed to remove image file'); const arr = storageGetPlain('rabbitdex') || []; arr.splice(index,1); storageSetPlain('rabbitdex',arr); updateGallery(); detail.innerHTML = '<div>Deleted</div>'; updateDebug(); }; updateDebug(); }
+
+/* ---------- Views & Buttons ---------- */
+function switchView(view){ views.forEach(v=>{ const el = document.getElementById(v); if (el) el.classList.add('hidden'); const control = document.getElementById(v+'-controls'); if (control) control.style.display='none'; }); const showEl = document.getElementById(view); if (showEl) showEl.classList.remove('hidden'); const showCtrl = document.getElementById(view+'-controls'); if (showCtrl) showCtrl.style.display='grid'; currentView = view; // show terminal only on home or camera optionally
+  terminalPanel.classList.toggle('hidden', view !== 'home'); updateDebug(); }
+
 document.getElementById('start-camera').addEventListener('click', startCamera);
 document.getElementById('stop-camera').addEventListener('click', stopCamera);
-document.getElementById('go-to-camera').addEventListener('click', async ()=>{ switchView('camera'); try{ await startCamera(); } catch(e){ log('startCamera failed on view open'); } });
+document.getElementById('go-to-camera').addEventListener('click', async ()=>{ switchView('camera'); try{ await startCamera(); }catch(e){ log('startCamera failed'); }});
 document.getElementById('go-to-rabbitdex').addEventListener('click', ()=>{ switchView('rabbitdex'); updateGallery(); });
 document.getElementById('exit-camera').addEventListener('click', ()=>switchView('home'));
 document.getElementById('exit-rabbitdex').addEventListener('click', ()=>switchView('home'));
-document.getElementById('narrate').addEventListener('click', async ()=>{ const entries = storageGetPlain('rabbitdex') || []; if (!entries || !entries[currentIndex]) return log('No entry to narrate'); const e = entries[currentIndex]; try { await sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${e.name}.` }, { timeout:15000 }); log('Narration request sent'); } catch(err){ log('Narration failed: ' + (err && err.message ? err.message : err)); } });
-document.getElementById('delete-entry').addEventListener('click', ()=>{ const arr = storageGetPlain('rabbitdex') || []; if (!arr || !arr[currentIndex]) return log('No entry selected'); if (!confirm('Delete entry ' + arr[currentIndex].name + '?')) return; const key = arr[currentIndex].imageKey; if (key) storageRemoveFile(key); arr.splice(currentIndex,1); storageSetPlain('rabbitdex',arr); updateGallery(); document.getElementById('detail').innerHTML = ''; });
+document.getElementById('narrate').addEventListener('click', async ()=>{ const entries = storageGetPlain('rabbitdex') || []; if (!entries || !entries[currentIndex]) return log('No entry to narrate'); const e = entries[currentIndex]; try{ await sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${e.name}.` }, { timeout:15000 }); log('Narration request sent'); }catch(err){ log('Narration failed: ' + (err && err.message ? err.message : err)); }});
+document.getElementById('delete-entry').addEventListener('click', ()=>{ const arr = storageGetPlain('rabbitdex') || []; if (!arr || !arr[currentIndex]) return log('No entry selected'); if (!confirm('Delete entry ' + arr[currentIndex].name + '?')) return; const key = arr[currentIndex].imageKey; if (key) storageRemoveFile(key); arr.splice(currentIndex,1); storageSetPlain('rabbitdex',arr); updateGallery(); document.getElementById('detail').innerHTML=''; });
 
-/* Hardware fallback events */
+/* ---------- Terminal UI wiring ---------- */
+document.getElementById('terminal-send').addEventListener('click', async ()=>{
+  const v = terminalInput.value.trim();
+  if (!v){ terminalLog.textContent = 'Type a prompt'; return; }
+  terminalLog.textContent = 'Sending...';
+  try{
+    const resp = await sendToLLM({ llm: v }, { timeout:30000, retries:2 });
+    terminalLog.textContent = typeof resp === 'object' ? JSON.stringify(resp) : String(resp);
+    window._lastTerminalReply = resp;
+  }catch(err){ terminalLog.textContent = 'LLM error: ' + (err && err.message ? err.message : err); }
+});
+document.getElementById('terminal-use').addEventListener('click', async ()=>{
+  let name = terminalInput.value.trim();
+  if (!name && window._lastTerminalReply){
+    if (typeof window._lastTerminalReply === 'string') name = window._lastTerminalReply.trim();
+    else if (window._lastTerminalReply.name) name = window._lastTerminalReply.name.trim();
+    else if (typeof window._lastTerminalReply === 'object') name = JSON.stringify(window._lastTerminalReply);
+  }
+  if (!name){ terminalLog.textContent = 'No name available'; return; }
+  terminalLog.textContent = 'Searching for: ' + name;
+  try{
+    const url = await findPokedexUrlByName(name);
+    const entry = { name: name, pokedexUrl: url || '', imageKey: '', capturedAt: new Date().toISOString() };
+    const arr = storageGetPlain('rabbitdex') || [];
+    arr.push(entry);
+    storageSetPlain('rabbitdex', arr);
+    terminalLog.textContent = 'Saved: ' + name;
+    updateGallery();
+    switchView('rabbitdex');
+    showDetail(arr.length - 1);
+  }catch(e){ terminalLog.textContent = 'Save error: ' + (e && e.message ? e.message : e); }
+});
+
+/* ---------- Hardware fallback events ---------- */
 window.addEventListener('scrollUp', ()=>{ if (currentView==='rabbitdex'){ const entries = storageGetPlain('rabbitdex')||[]; if (currentIndex>0) showDetail(--currentIndex); }});
 window.addEventListener('scrollDown', ()=>{ if (currentView==='rabbitdex'){ const entries = storageGetPlain('rabbitdex')||[]; if (currentIndex<entries.length-1) showDetail(++currentIndex); }});
 window.addEventListener('longPressStart', ()=>{ if (currentView==='rabbitdex'){ const entries = storageGetPlain('rabbitdex')||[]; if (!entries||!entries[currentIndex]) return; const entry = entries[currentIndex]; sendToLLM({ llm: `Speak this RabbitDex entry aloud in a robotic voice: ${entry.name}.` }, { timeout:15000 }).catch(()=>log('Narration failed')); }});
 
-/* Init */
+/* ---------- Init ---------- */
 document.getElementById('home-controls').style.display = 'grid';
 switchView('home');
 updateDebug();
