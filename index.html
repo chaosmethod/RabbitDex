@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>RabbitDex Patched</title>
+  <title>RabbitDex PTT Capture</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body {
@@ -70,7 +70,6 @@
     <div id="camera-controls" role="group" aria-label="camera controls">
       <button id="start-camera" class="button">Start</button>
       <button id="stop-camera" class="button">Stop</button>
-      <button id="scan" class="button">Scan</button>
       <button id="exit-camera" class="exit-btn button">Exit</button>
     </div>
 
@@ -144,19 +143,41 @@
         log('Camera stopped');
       }
     }
-    async function captureImageBase64() {
+
+    // Robust ensure with retries
+    async function ensureCameraReady(retries = 6, delayMs = 300) {
       if (!cameraStream) {
+        log('Camera not started; starting camera automatically');
         await startCamera();
-        if (!cameraStream) throw new Error('Camera not available');
       }
-      if (!videoEl || videoEl.readyState < 2) throw new Error('Camera not ready');
-      const canvas = document.createElement('canvas');
-      canvas.width = 240;
-      canvas.height = 282;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      return dataUrl.split(',')[1];
+      for (let i = 0; i < retries; i++) {
+        if (videoEl && videoEl.readyState >= 2) {
+          log('Camera ready (readyState=' + videoEl.readyState + ')');
+          return true;
+        }
+        log('Waiting for camera ready... attempt ' + (i+1));
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+      log('Camera failed to become ready after retries (readyState=' + (videoEl ? videoEl.readyState : 'no-video') + ')');
+      return false;
+    }
+
+    async function captureImageBase64() {
+      const ok = await ensureCameraReady();
+      if (!ok) throw new Error('Camera not ready for capture');
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 240;
+        canvas.height = 282;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        log('Image captured locally (size: ' + dataUrl.length + ' chars)');
+        return dataUrl.split(',')[1];
+      } catch (e) {
+        log('captureImage error: ' + (e && e.message ? e.message : e));
+        throw e;
+      }
     }
 
     // ---------- Robust LLM messaging ----------
@@ -302,13 +323,17 @@
       return null;
     }
 
-    // ---------- Scan flow bound to PTT ----------
-    async function pttScanHandler() {
+    // ---------- Core PTT scan flow ----------
+    async function doScanAndProcess() {
       try {
-        log('PTT pressed: capturing image');
+        if (!cameraStream) {
+          await startCamera();
+          await new Promise(r => setTimeout(r, 200));
+        }
+
         const imageBase64 = await captureImageBase64();
+        log('Capture succeeded; sending to LLM next');
         const prompt = 'what is this pokemon in a name only reply';
-        log('Sending to LLM: "' + prompt + '"');
         let llmResp;
         try {
           llmResp = await sendToLLM({ llm: prompt, imageBase64 }, { timeout: 20000 });
@@ -329,16 +354,25 @@
         switchView('rabbitdex');
         showDetail((storageGet('rabbitdex') || []).length - 1);
       } catch (e) {
-        log('PTT scan error: ' + (e && e.message ? e.message : e));
+        log('doScanAndProcess error: ' + (e && e.message ? e.message : e));
       }
     }
 
-    // Bind hardware PTT (sideClick)
-    window.addEventListener('sideClick', () => {
-      if (window._pttBusy) return;
-      window._pttBusy = true;
-      pttScanHandler().finally(() => setTimeout(() => { window._pttBusy = false; }, 700));
-    });
+    // Bind PTT handler (supports multiple event names); debounce
+    function bindPTT() {
+      const handler = () => {
+        if (window._pttBusy) { log('PTT ignored; busy'); return; }
+        window._pttBusy = true;
+        log('PTT event received');
+        doScanAndProcess().finally(() => setTimeout(() => { window._pttBusy = false; }, 700));
+      };
+      try { window.removeEventListener('sideClick', handler); } catch(e){}
+      try { window.removeEventListener('sideclick', handler); } catch(e){}
+      window.addEventListener('sideClick', handler);
+      window.addEventListener('sideclick', handler);
+      log('PTT handlers bound (sideClick & sideclick)');
+    }
+    bindPTT();
 
     // ---------- Save, gallery, UI ----------
     function saveEntry(entry) {
@@ -355,7 +389,7 @@
       entries.forEach((entry, i) => {
         const li = document.createElement('li');
         const img = document.createElement('img');
-        img.src = entry.pokedexUrl ? 'https://via.placeholder.com/96?text=?' : 'https://via.placeholder.com/96?text=?';
+        img.src = 'https://via.placeholder.com/96?text=?';
         img.alt = entry.name;
         const label = document.createElement('div');
         label.style.flex = '1';
@@ -406,8 +440,7 @@
     // ---------- Button events ----------
     document.getElementById('start-camera').addEventListener('click', startCamera);
     document.getElementById('stop-camera').addEventListener('click', stopCamera);
-    document.getElementById('scan').addEventListener('click', async () => { await pttScanHandler(); });
-    document.getElementById('go-to-camera').addEventListener('click', () => switchView('camera'));
+    document.getElementById('go-to-camera').addEventListener('click', async () => { switchView('camera'); try { await startCamera(); } catch(e){ log('startCamera on view open failed'); } });
     document.getElementById('go-to-rabbitdex').addEventListener('click', () => { switchView('rabbitdex'); updateGallery(); });
     document.getElementById('exit-camera').addEventListener('click', () => switchView('home'));
     document.getElementById('exit-rabbitdex').addEventListener('click', () => switchView('home'));
@@ -421,7 +454,7 @@
       } catch (err) { log('Narration failed: ' + (err && err.message ? err.message : err)); }
     });
 
-    // ---------- Hardware events fallback ----------
+    // ---------- Hardware event fallbacks ----------
     window.addEventListener('scrollUp', () => {
       if (currentView === 'rabbitdex') {
         const entries = storageGet('rabbitdex', []);
@@ -447,9 +480,7 @@
     window.addEventListener('touchstart', (e) => {
       const t = e.touches && e.touches[0];
       if (!t) return;
-      const scanBtn = document.getElementById('scan');
       const narrateBtn = document.getElementById('narrate');
-      if (currentView === 'camera' && scanBtn && scanBtn.contains(t.target)) { pttScanHandler(); }
       if (currentView === 'rabbitdex' && narrateBtn && narrateBtn.contains(t.target)) {
         const entries = storageGet('rabbitdex', []);
         if (entries && entries[currentIndex]) {
